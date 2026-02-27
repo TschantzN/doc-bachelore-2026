@@ -143,14 +143,20 @@ sais plus combien de temps ~10h
 		au PC pour l'image
 	- Display 		  : récuperer l'image et la streamer
 
-- Grille d'évaluation 
+A. IP based UDP Broadcast EKH19 (ou 05 selon capacité) + RX en monitor mode en utilisant libpicap
+
+B. Raw broadcast + LDPC COMPLIQUÉ car fonction cacher dans le binaire.
+
+C. utiliser les examples...
 
 a faire: 
 - installer et prendre en main le SDK mm-iot-SDK et l'ouvrir dans
 STM32cubeIDE
 - réaliser le cahier des charges
 - faire l'introduction 
-- settuper pour faire le gantt
+- checker si on peux desactiver l'encryption sur le ekh19 (et le mettre en monitor mode)
+
+
 
 
 ## Mars

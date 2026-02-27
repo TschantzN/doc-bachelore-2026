@@ -2,6 +2,7 @@
 Nathan Tschantz, printemps 2026.
 
 ## Gantt 
+LES TACHES SONT PUREMENT FACTICE POUR TESTER LA CAPACITE DE mermaid POUR LA RÉALISATION DU DIAGRAMME DE Gantt
 ```mermaid
 gantt
 title Planning Bachelor Transmission vidéo FPV
@@ -43,7 +44,7 @@ Finalisation rapport & correction :a9, after a7, 14d
 sais plus combien de temps ~10h
 ### Vendredi 27.02
 - clarification de la strucuture du projet
-- rédaction de rapport
+- rédaction de rapport et du cahier des charges
 - Lecture de documentation RTOS et EKH05
 
 ## Mars
