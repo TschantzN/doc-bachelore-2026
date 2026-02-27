@@ -145,6 +145,13 @@ sais plus combien de temps ~10h
 
 - Grille d'évaluation 
 
+a faire: 
+- installer et prendre en main le SDK mm-iot-SDK et l'ouvrir dans
+STM32cubeIDE
+- réaliser le cahier des charges
+- faire l'introduction 
+- settuper pour faire le gantt
+
 
 ## Mars
 

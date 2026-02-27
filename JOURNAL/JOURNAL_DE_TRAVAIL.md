@@ -1,5 +1,6 @@
 # Journal de travail
 Nathan Tschantz, printemps 2026.
+
 ## Février
 ### Vendredi 20.02
 - Lancement du travail de bachelor. 
