@@ -1,0 +1,115 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\graphicspath{ {./imgs/} }
+\usepackage{fancyhdr} 
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{hyperref} 
+\usepackage{longtable}
+\usepackage{array}  
+\setlength{\parindent}{0pt}
+\usepackage{minted}
+
+\usepackage{makeidx}
+\makeindex 
+
+\geometry{
+    top=4cm, 
+    bottom=2.5cm, 
+    left=2.5cm, 
+    right=2.5cm,
+    headheight=3cm, 
+    headsep=0.5cm,
+    }
+
+% Define the custom headers
+\fancypagestyle{firstpage}{% First page header style
+    \fancyhf{} % Clear all header/footer fields
+    \fancyhead[L]{%
+        \includegraphics[height=1.5cm]{imgs/logos/heig-vd-baseline.pdf} \\
+    }
+    \fancyhead[R]{%
+        \includegraphics[height=1.5cm]{imgs/logos/hes-so.pdf} \\
+    }
+    \fancyfoot{} % No footer on the first page
+}
+
+% Define other pages style
+\fancypagestyle{otherpages}{%
+    \fancyhf{}
+    \fancyhead[L]{%
+        \includegraphics[height=1.5cm]{imgs/logos/heig-vd.pdf} \\
+    }
+    \fancyfoot[C]{\small page \thepage}
+}
+
+\begin{document}
+\emergencystretch=1em 
+
+% First page content
+\thispagestyle{firstpage}
+\vspace*{2cm}
+\begin{center}
+    \Huge Transmission vidéo basse latence pour drone FPV\\
+    \vspace{0.2cm}
+    \Huge Cahier des charges\\
+    \vspace{0.2cm}
+    \Large Travail de Bachelor\\
+    \vspace{0.2cm}
+    \small Non Confidentiel\\
+    \vspace{0.5cm}
+    Départements : TIC\\
+    \vspace{0.5cm}
+    Filière : Informatique et systèmes de communication\\
+    \vspace{0.5cm}
+    Orientation : Systèmes informatiques embarqués\\
+\end{center}
+
+\vspace{9cm}
+
+\renewcommand{\arraystretch}{1.5} % Adjust row height
+
+\begin{flushleft} % Left-align the table
+    \begin{tabular}{@{}l l@{}}
+        \textbf{Auteur :}      & \textbf{Tschantz Nathan} \\
+        \textbf{Supervisé par :}   & \textbf{Favrat Pierre} \\
+        \textbf{Date :}         & \textbf{\today} \\
+    \end{tabular}
+\end{flushleft}
+
+% Empty page
+\newpage
+\thispagestyle{empty}
+\mbox{}
+\newpage
+\include{historic.tex}
+\newpage
+\tableofcontents % Sommaire
+\newpage
+\listoffigures    % Liste des figures
+\newpage
+\listoftables     % Liste des tableaux
+
+\newpage
+\pagestyle{otherpages}
+\include{introduction.tex}
+% ============================================================== Contenu
+\include{description.tex}
+
+\include{need.tex}
+
+\include{function.tex}
+
+% ==============================================================
+\newpage
+\section{Bibliographie}
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{bibliography}
+
+
+\newpage
+\include{annexes}
+\end{document}
