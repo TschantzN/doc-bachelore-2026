@@ -1,0 +1,46 @@
+# =========================
+# Fichiers temporaires LaTeX / MiKTeX
+# =========================
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.idx
+*.ind
+*.lof
+*.lot
+*.out
+*.toc
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.ist
+*.fls
+*.log
+*.fdb_latexmk
+*.synctex.gz
+*.xdv
+*.run.xml
+
+# =========================
+# VS Code
+# =========================
+# Ignore les configurations locales de l'éditeur
+.vscode/
+
+# =========================
+# Fichiers Système
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Fichiers PDF (Optionnel)
+# =========================
+# Décommentez la ligne ci-dessous si vous ne voulez PAS que Git sauvegarde vos PDF générés.
+# Personnellement, je recommande de versionner le source (.tex) mais pas le résultat (.pdf), 
+# sauf pour les versions finales (rendus officiels).
+# *.pdf
