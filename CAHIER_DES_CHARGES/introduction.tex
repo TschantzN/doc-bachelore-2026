@@ -1,9 +1,114 @@
 \section{Introduction}
-but du projet, context etc...
-\subsection{Références normatives}
+Le pilotage de drones FPV )First Person View) requiert un retour vidéo en temps 
+réel très fiable. Actuellement, la majorité de ces systèmes repose sur des liaisons 
+analogiques ou numériques fonctionnant dans la bande des 5.8 GHz. Bien que cette bande offre une 
+large bande passante, elle a une faible capacité de pénétration des obstacles (Non-Line-Of-Sight) et
+donc une portée limitée en environnement urbain ou forestier.
 
-802.11ah etc
+La norme IEEE 802.11ah ou Wi-Fi HaLow, quant à elle utilise une bande 
+sub-GHz (inférieur à 1 GHz). Elle permet théoriquement une portée kilométrique et une bien meilleure pénétration des 
+matériaux. Cependant, le Wi-Fi standard n'étant initialement pas conçu pour le flux vidéo 
+déterministe, des adaptations de la couche physique (PHY) et de la couche de liaison (MAC) sont 
+nécessaires pour minimiser la latence.
+
+Ce Travail de Bachelor a pour objectif de concevoir, développer et valider un prototype de transmission 
+vidéo basé sur des modules Morse Micro. L'enjeu principal réside dans l'optimisation de la 
+liaison radio, notamment par le forçage des schémas de modulation (MCS) et l'activation du codage correcteur 
+d'erreurs LDPC (Low-Density Parity-Check).
+
+\subsection{Références normatives}
+Les documents suivants cités dans le texte constituent, pour tout ou partie de leur contenu, des 
+exigences ou des bases théoriques fondamentales du présent projet.
+
+\vspace{0.5cm}
+
+\begin{longtable}{|p{4.5cm}|p{10.5cm}|}
+\caption{Références normatives}
+\label{tab:normes} \\
+\hline
+\textbf{Norme / Standard} & \textbf{Description} \\
+\hline
+\endfirsthead
+
+\multicolumn{2}{c}%
+{{\bfseries \tablename\ \thetable{} -- suite de la page précédente}} \\
+\hline
+\textbf{Norme / Standard} & \textbf{Description} \\
+\hline
+\endhead
+
+\hline \multicolumn{2}{|r|}{{Suite à la page suivante}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+\textbf{IEEE 802.11ah-2016} & Amendement au standard IEEE 802.11 définissant les spécifications des couches PHY 
+et MAC pour le fonctionnement dans les bandes exemptes de licence sous 1 GHz (Wi-Fi HaLow). \\
+\hline
+\textbf{IETF RFC 768} & Spécification du protocole UDP (User Datagram Protocol), utilisé pour la transmission vidéo à faible latence. \\
+\hline
+\textbf{ITU-T H.264 / H.265} & (Si applicable) Normes de codage vidéo très efficace utilisées par l'encodeur 
+vidéo embarqué sur le drone. \\
+\end{longtable}
+
+\newpage
 
 \subsection{Abréviations}
+Cette section précise les terminologies techniques et les acronymes propres au domaine des télécommunications, des systèmes 
+embarqués et du projet.
 
+\vspace{0.5cm}
+
+\begin{longtable}{|l|p{12cm}|}
+\caption{Liste des abréviations}
+\label{tab:abreviations} \\
+\hline
+\textbf{Terme} & \textbf{Définition} \\
+\hline
+\endfirsthead
+
+\multicolumn{2}{c}%
+{{\bfseries \tablename\ \thetable{} -- suite de la page précédente}} \\
+\hline
+\textbf{Terme} & \textbf{Définition} \\
+\hline
+\endhead
+
+\hline \multicolumn{2}{|r|}{{Suite à la page suivante}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+\textbf{BCC} & Binary Convolutional Code (Code convolutif binaire) - Méthode de correction d'erreur standard en Wi-Fi. \\
+\hline
+\textbf{FPV} & First Person View (Vol en immersion) - Pilotage via une caméra embarquée retransmettant la vidéo en temps réel au pilote. \\
+\hline
+\textbf{HEIG-VD} & Haute École d'Ingénierie et de Gestion du Canton de Vaud. \\
+\hline
+\textbf{IEEE} & Institute of Electrical and Electronics Engineers. \\
+\hline
+\textbf{LDPC} & Low-Density Parity-Check (Code de contrôle de parité à faible densité) - Algorithme avancé de correction d'erreurs offrant une meilleure robustesse que le BCC. \\
+\hline
+\textbf{MAC} & Media Access Control (Contrôle d'accès au support) - Sous-couche de liaison de données. \\
+\hline
+\textbf{MCS} & Modulation and Coding Scheme (Schéma de modulation et de codage) - Indice définissant le débit de données physique en fonction de la modulation et du taux de codage (code rate). \\
+\hline
+\textbf{MVP} & Minimum Viable Product (Produit Minimum Viable) - Version fonctionnelle de base garantissant la validation du concept technique. \\
+\hline
+\textbf{NLOS} & Non-Line-Of-Sight (Absence de ligne de vue) - Situation où un obstacle sépare l'émetteur du récepteur. \\
+\hline
+\textbf{OS} & Operating System (Système d'exploitation) \\
+\hline
+\textbf{PHY} & Physical Layer (Couche physique) - Première couche du modèle OSI. \\
+\hline
+\textbf{RTOS} & Real-Time Operating System (Système d'exploitation temps réel) - Système conçu pour traiter les événements avec des contraintes temporelles strictes (utilisé sur le RX). \\
+\hline
+\textbf{RX} & Receiver (Récepteur) - Station au sol. \\
+\hline
+\textbf{TX} & Transmitter (Émetteur) - Module embarqué sur le Drone. \\
+\hline
+\textbf{UDP} & User Datagram Protocol - Protocole de communication en mode non connecté, privilégié pour les transmission en temps réel. \\
+\end{longtable}
 
