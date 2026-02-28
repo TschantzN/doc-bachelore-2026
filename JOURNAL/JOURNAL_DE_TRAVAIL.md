@@ -7,7 +7,7 @@ Nathan Tschantz, printemps 2026.
 - Première recherche sur la faisabilité de l'utilisation du MM8108-EKH19. 
 - recherche d'option possible pour set le MCS et le code correcteur LDPC.
 
-7h30.
+7h30
 ### Samedi - Mardi 21.02 - 24.02
 
 - compilation du kernel et du driver
@@ -15,16 +15,20 @@ Nathan Tschantz, printemps 2026.
 - test du driver modifier sur le module wifi
 - Les options semble être setter et la fonction voulue
 
-sais plus combien de temps ~10h
+10h
 ### Vendredi 27.02
 - clarification de la strucuture du projet
 - rédaction de rapport et du cahier des charges
 - Lecture de documentation RTOS et EKH05
+
+8h
 ### Samedi 28.02
 - fini la première version du cahier des charges.
+- fini la première version du diagramme de Gantt
 
+4h
 #### Gantt
-_Note :Le Gantt sera update au fure et a mesure du projets lorsque les tâches se préciserons_ 
+_Note :Le Gantt sera update au fur et à mesure du projet lorsque les tâches se préciserons_ 
 ```mermaid
 gantt
     title Planning 450h
@@ -56,7 +60,7 @@ gantt
     soumettre le CDC         :milestone ,2026-03-01, 0d
     CDC valider              :milestone ,2026-03-09, 0d
 
-    Journal de bord et Note jouenalière :active, doc2, 2026-02-16, 2026-07-23
+    Journal de travail et Note journalière :active, doc2, 2026-02-16, 2026-07-23
     Rédaction Rapport - Intro + Faisabilité Ekh19 :doc3, 2026-02-27, 2026-03-21
     Rédaction Rapport - Réalisation :doc4, 2026-03-22, 2026-07-10
     Rendu intermédiaire         :milestone ,2026-05-20, 0d
