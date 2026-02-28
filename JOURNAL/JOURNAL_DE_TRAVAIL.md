@@ -15,7 +15,7 @@ Nathan Tschantz, printemps 2026.
 - Les options semble être setter et la fonction voulue
 
 ### Vendredi 27.02
-- clarification de la strucuture du projet
+- clarification de la structure du projet
 - rédaction de rapport et du cahier des charges
 - Lecture de documentation RTOS et EKH05
 
@@ -39,8 +39,8 @@ gantt
 
     section Semestre (15h/sem)
     Faisabilité Driver :done, p1, 2026-02-16, 2026-02-28
-    Setup SDK MM       :active, p1, 2026-02-29, 2026-03-06
-    ekh19 desactiver encryption - set monitor mode :active, p1, 2026-02-29, 2026-03-06
+    Setup SDK MM       :active, p1, 2026-03-01, 2026-03-06
+    ekh19 desactiver encryption - set monitor mode :active, p1, 2026-03-1, 2026-03-06
     Test flash RTOS    :milestone ,2026-03-06, 0d
 
     Dév. Segment TX (UDP)    : tx1,2026-03-06, 2026-06-14
