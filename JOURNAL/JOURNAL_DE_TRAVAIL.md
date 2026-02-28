@@ -7,7 +7,6 @@ Nathan Tschantz, printemps 2026.
 - Première recherche sur la faisabilité de l'utilisation du MM8108-EKH19. 
 - recherche d'option possible pour set le MCS et le code correcteur LDPC.
 
-7h30
 ### Samedi - Mardi 21.02 - 24.02
 
 - compilation du kernel et du driver
@@ -15,18 +14,15 @@ Nathan Tschantz, printemps 2026.
 - test du driver modifier sur le module wifi
 - Les options semble être setter et la fonction voulue
 
-10h
 ### Vendredi 27.02
 - clarification de la strucuture du projet
 - rédaction de rapport et du cahier des charges
 - Lecture de documentation RTOS et EKH05
 
-8h
 ### Samedi 28.02
 - fini la première version du cahier des charges.
 - fini la première version du diagramme de Gantt
 
-4h
 #### Gantt
 _Note :Le Gantt sera update au fur et à mesure du projet lorsque les tâches se préciserons_ 
 ```mermaid
