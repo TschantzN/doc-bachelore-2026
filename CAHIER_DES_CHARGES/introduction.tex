@@ -1,17 +1,17 @@
 \section{Introduction}
-Le pilotage de drones FPV )First Person View) requiert un retour vidéo en temps 
-réel très fiable. Actuellement, la majorité de ces systèmes repose sur des liaisons 
-analogiques ou numériques fonctionnant dans la bande des 5.8 GHz. Bien que cette bande offre une 
+Le pilotage de drones FPV (First Person View) requiert un retour vidéo en temps 
+réel très fiable. Actuellement, la majorité de ces systèmes reposent sur des liaisons 
+analogiques ou numériques fonctionnant dans la bande de fréquence des 5.8 GHz. Bien que cette plage de fréquence offre une 
 large bande passante, elle a une faible capacité de pénétration des obstacles (Non-Line-Of-Sight) et
 donc une portée limitée en environnement urbain ou forestier.
 
-La norme IEEE 802.11ah ou Wi-Fi HaLow, quant à elle utilise une bande 
+La norme IEEE 802.11ah ou Wi-Fi HaLow, quant à elle, utilise une bande 
 sub-GHz (inférieur à 1 GHz). Elle permet théoriquement une portée kilométrique et une bien meilleure pénétration des 
 matériaux. Cependant, le Wi-Fi standard n'étant initialement pas conçu pour le flux vidéo 
 déterministe, des adaptations de la couche physique (PHY) et de la couche de liaison (MAC) sont 
 nécessaires pour minimiser la latence.
 
-Ce Travail de Bachelor a pour objectif de concevoir, développer et valider un prototype de transmission 
+Ce travail de bachelor a pour objectif de concevoir, développer et valider un prototype de transmission 
 vidéo basé sur des modules Morse Micro. L'enjeu principal réside dans l'optimisation de la 
 liaison radio, notamment par le forçage des schémas de modulation (MCS) et l'activation du codage correcteur 
 d'erreurs LDPC (Low-Density Parity-Check).
@@ -109,8 +109,8 @@ embarqués et du projet.
 \hline
 \textbf{RX} & Receiver (Récepteur) - Station au sol. \\
 \hline
-\textbf{TX} & Transmitter (Émetteur) - Module embarqué sur le Drone. \\
+\textbf{TX} & Transmitter (Émetteur) - Module embarqué sur le drone. \\
 \hline
-\textbf{UDP} & User Datagram Protocol - Protocole de communication en mode non connecté, privilégié pour les transmission en temps réel. \\
+\textbf{UDP} & User Datagram Protocol - Protocole de communication en mode non connecté, privilégié pour les transmissions en temps réel. \\
 \end{longtable}
 

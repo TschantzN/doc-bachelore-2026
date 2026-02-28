@@ -3,25 +3,25 @@ Un drone FPV nécessite un retour vidéo avec une latence très faible et une
 grande robustesse aux obstacles (pénétration NLOS). Le standard Wi-Fi HaLow 
 (802.11ah) en bande Sub-1 GHz offre des caractéristiques qui le rende  
 idéales pour ce cas d'usage, mais n'est pas nativement optimisé pour un flux 
-continue à basse latence.
+continu à basse latence.
 
 
 Le défi technique majeur de ce projet se trouve dans le contrôle de bas niveau 
 des puces Morse Micro (MM8108). La documentation constructeur étant limitée, 
-l'activation des paramètres aux quels nous souhaitons accéder pour optimiser la portée 
+l'activation des paramètres auquels nous souhaitons accéder pour optimiser la portée 
 (codage LDPC et Schéma de Modulation et de Codage MCS restreint à 1 ou 2) requiert une 
-analyse du fonctionnement bas niveau de ces éléments et de leurs firmware.
-Impliquant donc des modifications directement dans les pilotes matériels.
+analyse du fonctionnement bas niveau de ces éléments et de leurs firmwares.
+Impliquant donc des modifications directement dans les pilotes matériels.\newline
 
-\textbf{Objectifs par paliers (Gestion du temps - 450h) :}\newline\newline
-Afin de garantir un résultat interssant du projet malgrès les incertitudes matérielles et 
+\textbf{Objectifs par paliers (Gestion du temps - 450h) :}\newline
+Afin de garantir un résultat intéressant du projet malgrès les incertitudes matérielles et 
 logicielles, les livrables sont divisés en deux niveaux :
 
 \begin{itemize}
-    \item \textbf{Objectif Minimum (MVP) :}Établir l'architecture matérielle complète de bout en 
+    \item \textbf{Objectif minimum (MVP) :}Établir l'architecture matérielle complète de bout en 
 bout et prouver la transmission de paquets de données génériques (texte, fichiers) 
 avec les contraintes physiques imposées (HaLow, MCS 1 ou 2, LDPC activé).
-    \item \textbf{Objectif Final (Idéal) :} Remplacer les données génériques par le flux vidéo réel 
+    \item \textbf{Objectif final (Idéal) :} Remplacer les données génériques par le flux vidéo réel 
 de l'encodeur, en respectant les contraintes de basse latence jusqu'à l'affichage sur 
 la station au sol.\newline
 \end{itemize}
