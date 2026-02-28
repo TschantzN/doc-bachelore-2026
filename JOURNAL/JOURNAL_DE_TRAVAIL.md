@@ -54,7 +54,7 @@ gantt
     section Documentation
     Rédaction du CDC         :active, doc1, 2026-02-16, 2026-03-09
     soumettre le CDC         :milestone ,2026-03-01, 0d
-    CDC valider              :milestone ,2026-03-09, 0d
+    CDC validé               :milestone ,2026-03-09, 0d
 
     Journal de travail et Note journalière :active, doc2, 2026-02-16, 2026-07-23
     Rédaction Rapport - Intro + Faisabilité Ekh19 :doc3, 2026-02-27, 2026-03-21
