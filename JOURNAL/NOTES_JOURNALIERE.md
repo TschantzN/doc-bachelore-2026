@@ -156,7 +156,8 @@ STM32cubeIDE
 - faire l'introduction 
 - checker si on peux desactiver l'encryption sur le ekh19 (et le mettre en monitor mode)
 
-
+### Samedi 28.02
+- fini la première version du cahier des charges.
 
 
 ## Mars

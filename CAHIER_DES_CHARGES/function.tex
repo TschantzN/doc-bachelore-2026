@@ -1,1 +1,112 @@
 \section{Fonctions et exigences du système}
+Pour pallier le manque de documentation et gérer la complexité, trois stratégies de 
+communication ont été identifiées. Elles sont classées par ordre de préférence 
+et font partie intégrante des exigences techniques du système.
+
+\begin{itemize}
+    \item \textbf{Option A (Privilégiée) :} Protocole UDP Broadcast côté TX (Jetson) 
+    combiné à une réception en mode moniteur (Monitor Mode) via \texttt{libpcap} côté RX (RTOS).
+    \item \textbf{Option B (Alternative performance) :} Diffusion brute (Raw Broadcast) 
+    avec LDPC. C'est l'option la plus rapide mais la plus complexe techniquement.
+    \item \textbf{Option C (Sécurité) :} Utilisation des exemples standards du 
+    constructeur. Solution techniquement simple mais avec des performances potentiellement 
+    trop faible.
+\end{itemize}
+
+\vspace{0.5cm}
+
+\begin{longtable}{|p{6cm}|p{9cm}|}
+\caption{Fonctions de service et exigences du système à concevoir}
+\label{tab:fonctions_service} \\
+\hline
+\textbf{Fonctions de service} & \textbf{Exigences} \\
+\hline
+\endfirsthead
+
+\multicolumn{2}{c}%
+{{\bfseries \tablename\ \thetable{} -- suite de la page précédente}} \\
+\hline
+\textbf{Fonctions de service} & \textbf{Exigences} \\
+\hline
+\endhead
+
+\hline \multicolumn{2}{|r|}{{Suite à la page suivante}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+\textbf{FS 1 :} Transmettre des données sans fil (MVP) 
+& \textbf{E 1 :} Utiliser la norme IEEE 802.11ah (Wi-Fi HaLow). \\
+\cline{2-2}
+& \textbf{E 2 :} Forcer l'utilisation d'un MCS bas (index 1 ou 2). \\
+\cline{2-2}
+& \textbf{E 3 :} Activer la correction d'erreur LDPC. \\
+\hline
+\textbf{FS 2 :} Transmettre un flux vidéo (Objectif Final) 
+& \textbf{E 4 :} Interfacer l'encodeur vidéo avec la carte Jetson. \\
+\cline{2-2}
+& \textbf{E 5 :} Assurer le décodage et l'affichage sur la station de recéption. \\
+\end{longtable}
+
+\vspace{0.5cm}
+
+\begin{longtable}{|p{6cm}|p{9cm}|}
+\caption{Fonctions techniques et exigences du système à concevoir}
+\label{tab:fonctions_techniques} \\
+\hline
+\textbf{Fonctions techniques} & \textbf{Exigences} \\
+\hline
+\endfirsthead
+
+\multicolumn{2}{c}%
+{{\bfseries \tablename\ \thetable{} -- suite de la page précédente}} \\
+\hline
+\textbf{Fonctions techniques} & \textbf{Exigences} \\
+\hline
+\endhead
+
+\hline \multicolumn{2}{|r|}{{Suite à la page suivante}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+\textbf{FT 1 :} Assurer la communication 
+& \textbf{E 6 :} Implémenter la communication selon l'Option A (UDP Broadcast / Monitor mode) en priorité. \\
+\cline{2-2}
+& \textbf{E 7 :} Les options B (Raw) et C (Exemples) serviront de plans secondaire. \\
+\hline
+\textbf{FT 2 :} S'adapter aux limitations matérielles 
+& \textbf{E 8 :} L'architecture doit permettre la substitution du module TX (EKH19 par EKH05-01) en cas d'incompatibilité avec les modifications du pilote. \\
+\end{longtable}
+
+\vspace{0.5cm}
+
+\begin{longtable}{|p{6cm}|p{9cm}|}
+\caption{Fonctions de contrainte et exigences du système à concevoir}
+\label{tab:fonctions_contrainte} \\
+\hline
+\textbf{Fonctions de contrainte} & \textbf{Exigences} \\
+\hline
+\endfirsthead
+
+\multicolumn{2}{c}%
+{{\bfseries \tablename\ \thetable{} -- suite de la page précédente}} \\
+\hline
+\textbf{Fonctions de contrainte} & \textbf{Exigences} \\
+\hline
+\endhead
+
+\hline \multicolumn{2}{|r|}{{Suite à la page suivante}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+\textbf{FC 1 :} Respecter la contrainte temps 
+& \textbf{E 9 :} Réalisable en 450 heures. Le MVP fait foi si l'objectif final (idéale). \\
+\hline
+\textbf{FC 2 :} Composer avec la documentation limitée 
+& \textbf{E 10 :} Justifier les choix techniques basés sur l'ingénierie inverse et les tests empiriques. \\
+\end{longtable}
