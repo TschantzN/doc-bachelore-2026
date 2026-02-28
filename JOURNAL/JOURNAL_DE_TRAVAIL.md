@@ -24,7 +24,7 @@ Nathan Tschantz, printemps 2026.
 - fini la première version du diagramme de Gantt
 
 #### Gantt
-_Note :Le Gantt sera update au fur et à mesure du projet lorsque les tâches se préciserons_ 
+_Note :Le Gantt sera update au fur et à mesure du projet lorsque les tâches se préciseront_ 
 ```mermaid
 gantt
     title Planning 450h
