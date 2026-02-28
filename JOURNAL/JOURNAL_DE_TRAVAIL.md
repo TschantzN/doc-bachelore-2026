@@ -27,7 +27,7 @@ sais plus combien de temps ~10h
 _Note :Le Gantt sera update au fure et a mesure du projets lorsque les tâches se préciserons_ 
 ```mermaid
 gantt
-    title Planning 450h - Drone FPV HaLow
+    title Planning 450h
     dateFormat  YYYY-MM-DD
     axisFormat  %d/%m
 
@@ -40,7 +40,9 @@ gantt
     section Semestre (15h/sem)
     Faisabilité Driver :done, p1, 2026-02-16, 2026-02-28
     Setup SDK MM       :active, p1, 2026-02-29, 2026-03-06
-    ekh19 desactiver encryption-monitor mode :active, p1, 2026-02-29, 2026-03-06
+    ekh19 desactiver encryption - set monitor mode :active, p1, 2026-02-29, 2026-03-06
+    Test flash RTOS    :milestone ,2026-03-06, 0d
+
     Dév. Segment TX (UDP)    : tx1,2026-03-06, 2026-06-14
     Dév. Segment RX (RTOS)   :rx1, 2026-03-06, 2026-06-14
 
@@ -51,10 +53,15 @@ gantt
 
     section Documentation
     Rédaction du CDC         :active, doc1, 2026-02-16, 2026-03-09
+    soumettre le CDC         :milestone ,2026-03-01, 0d
+    CDC valider              :milestone ,2026-03-09, 0d
+
     Journal de bord et Note jouenalière :active, doc2, 2026-02-16, 2026-07-23
-    Rédaction Rapport : Étude & TX :doc3, 2026-02-27, 2026-05-15
-    Rédaction Rapport : RX & Intégration :doc4, 2026-05-16, 2026-07-10
-    Finalisation & Mise en page :doc5, 2026-07-11, 2026-07-20
+    Rédaction Rapport - Intro + Faisabilité Ekh19 :doc3, 2026-02-27, 2026-03-21
+    Rédaction Rapport - Réalisation :doc4, 2026-03-22, 2026-07-10
+    Rendu intermédiaire         :milestone ,2026-05-20, 0d
+    Finalisation & Mise en page :doc5, 2026-07-11, 2026-07-23
+    Rendu final                 :milestone ,2026-07-23, 0d
 ```
 
 ## Mars
