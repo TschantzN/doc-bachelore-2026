@@ -22,6 +22,7 @@ Nathan Tschantz, printemps 2026.
 ### Samedi 28.02
 - fini la première version du cahier des charges.
 - fini la première version du diagramme de Gantt
+- setup du mm-iot-sdk avec STM32cubeIDE. (voire note journalière pour le détails)
 
 #### Gantt
 _Note :Le Gantt sera update au fur et à mesure du projet lorsque les tâches se préciseront_ 

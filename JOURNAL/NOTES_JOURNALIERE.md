@@ -159,6 +159,72 @@ STM32cubeIDE
 ### Samedi 28.02
 - fini la première version du cahier des charges.
 
+**Setup de l'environnement de développement (MM IoT SDK & STM32CubeIDE sous Windows)**
+
+Voici les étapes réalisées pour configurer la chaîne de cross compilation sous Windows avec STM32CubeIDE :
+
+**1. Récupération du SDK (Git)**
+
+* Fork du dépôt officiel `MorseMicro/mm-iot-sdk` sur GitHub.
+* Clonage local dans `C:\Users\natha\OneDrive\Bureau\TB\mm-iot-sdk`.
+* Téléchargement des dépendances vitales (FreeRTOS, lwIP, mbedTLS) via la commande :
+`git submodule update --init --recursive`
+
+**2. Importation dans STM32CubeIDE**
+
+* Création du Workspace `C:\Users\natha\OneDrive\Bureau\TB\workspace_mm`.
+* Le SDK n'utilisant pas la structure standard de STM32cubeIDE, l'importation a été faite via : **File > New > Makefile Project with Existing Code**.
+* Sélection du dossier cible pour l'EKH05 : `\mm-iot-sdk\examples\ping\targets\mm-mm6108-ekh05`.
+* Sélection de la toolchain : **ARM Cross GCC**.
+
+**3. Configuration du compilateur sous Windows (Variables d'environnement)**
+
+* Windows ne possédant pas nativement `make`, il a fallu lier les outils internes de STM32CubeIDE au projet.
+* Dans `Properties > C/C++ Build > Environment`, ajout de deux chemins en tête de la variable `PATH` :
+* Le chemin vers `make.exe` (situé dans `C:\ST\STM32CubeIDE_1.19.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.make.win32_2.2.0.202409170845\tools\bin`).
+* Le chemin vers `arm-none-eabi-gcc.exe` (situé dans `C:\ST\STM32CubeIDE_1.19.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.0.202411081344\tools\bin`).
+
+**4. Modification des Makefiles (Adaptation Linux -> Windows)**
+
+* Le SDK force nativement l'utilisation d'une toolchain spécifique (10.3) située dans les répertoires Linux (`/opt/`).
+* Modification du fichier `\mm-iot-sdk\framework\mkcore-arm-cortex-m33f.mk` pour empecher la recherche de ces dossiers et utiliser la `PATH` de Windows :
+```mk
+# Configure the toolchain
+TOOLCHAIN_VERSION ?= 10.3-2021.07
+
+# Try to find the toolchain if not already specified
+==================== On commente ca ====================
+#ifeq ($(TOOLCHAIN_DIR),)
+#    directory_exists = $(shell [ -d $(1) ] && echo "exists")
+#    TOOLCHAIN_DIR := /opt/morse/gcc-arm-none-eabi-$(TOOLCHAIN_VERSION)
+#    ifeq ($(call directory_exists,$(TOOLCHAIN_DIR)),)
+#        TOOLCHAIN_DIR := /opt/gcc-arm-none-eabi-$(TOOLCHAIN_VERSION)
+#        ifeq ($(call directory_exists,$(TOOLCHAIN_DIR)),)
+#            $(error Unable to find arm-none-eabi-$(TOOLCHAIN_VERSION) toolchain)
+#        endif
+#   endif
+#else
+#	TOOLCHAIN_DIR := $(TOOLCHAIN_DIR)
+#endif
+========================================================
+# --- MODIFICATION POUR WINDOWS / STM32CubeIDE ---
+# On ignore la recherche des dossiers Linux /opt/...
+# et on laisse le PATH système de STM32CubeIDE trouver le compilateur.
+TOOLCHAIN_DIR := 
+TOOLCHAIN_BASE := arm-none-eabi-
+
+======================= et ca ==========================
+#TOOLCHAIN_BASE := $(TOOLCHAIN_DIR)/bin/arm-none-eabi-
+========================================================
+
+CC := "$(TOOLCHAIN_BASE)gcc"
+CXX := "$(TOOLCHAIN_BASE)g++"
+AS := $(CC) -x assembler-with-cpp
+OBJCOPY := "$(TOOLCHAIN_BASE)objcopy"
+```
+
+La compilation fonctionne, le .elf est bien générer.
+(les .elf ce trouve dans `C:\Users\natha\OneDrive\Bureau\TB\mm-iot-sdk\examples\ping\targets\mm-mm6108-ekh05`)
 
 ## Mars
 
