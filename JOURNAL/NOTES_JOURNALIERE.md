@@ -227,6 +227,136 @@ La compilation fonctionne, le .elf est bien générer.
 (les .elf ce trouve dans `C:\Users\natha\OneDrive\Bureau\TB\mm-iot-sdk\examples\ping\targets\mm-mm6108-ekh05`)
 
 ## Mars
+### Dimanche 01.03
+
+dans la gui `http://192.168.12.1/cgi-bin/luci/admin/config` il possible
+de directement activer le monitor mode (qui desactive l'encryption par défaut) ou de rester en mode AP mais sans l'encryption.
+Enfaite il faut bien se connecter sur 192.168.12.1 et non 192.168.8.1 (12 = HaLow, 8 = Ethernet) mais les image ci-dessous rest valide lan deviens ahwlan
+![settings MM8108](imgs/settings_radio2.png)
+![Monitor mode](imgs/monitor_mode_radio2.png)
+
+Pour que le driver modifier soit lancer au démarage
+```bash
+root@DUT-8108-EKH19-2_9_3:/tmp cd /lib/modules/5.15.167/
+# on sauvegarde le driver original
+root@DUT-8108-EKH19-2_9_3:/tmp cp morse.ko morse.ko.bak
+# et on remplace le driver
+root@DUT-8108-EKH19-2_9_3:/tmp cp /tmp/morse.ko ./
+```
+
+dans command.c
+```c
+int morse_cmd_set_rate_control(struct morse *mors)
+{
+	struct morse_cmd_req_set_rate_control req;
+	int ret;
+
+	morse_cmd_init(mors, &req.hdr, MORSE_CMD_ID_SET_RATE_CONTROL, 0, sizeof(req));
+	req.mcs10_mode = morse_mac_get_mcs10_mode();
+	req.mcs_mask = cpu_to_le16(morse_mac_get_mcs_mask());
+	req.enable_sgi_rc = mors->custom_configs.enable_sgi_rc;
+
+	//return morse_cmd_tx(mors, NULL, (struct morse_cmd_req *)&req, 0, 0, __func__);
+
+	// ================================================================
+    ret = morse_cmd_tx(mors, NULL, (struct morse_cmd_req *)&req, 0, 0, __func__);
+
+    if (ret == 0) {
+        printk(KERN_INFO "MORSE_HACK: RateControl OK, forçage MCS2 + LDPC...\n");
+        morse_cmd_set_fixed_transmission_rate(mors, 2, 2, 0, 0);
+    }
+
+    return ret;
+	// ================================================================
+}
+```
+
+pour focer le monitor mode en dure dans mac.c `|| 1` (il faudra chercher quelque chose de plus propre)
+```c
+static int morse_mac_ops_config(struct ieee80211_hw *hw, u32 changed)
+{
+	int err = 0;
+	struct morse *mors = hw->priv;
+	struct ieee80211_conf *conf = &hw->conf;
+	bool channel_valid;
+...
+//=======================================================
+	if (changed & IEEE80211_CONF_CHANGE_MONITOR || 1) {
+		int ret = 0;
+		struct morse_vif *mon_if = &mors->mon_if;
+
+		MORSE_DBG(mors, "%s: change monitor mode: %s\n",
+			  __func__, conf->flags & IEEE80211_CONF_MONITOR ? "true" : "false");
+		if (conf->flags & IEEE80211_CONF_MONITOR || 1) {
+			ret = morse_cmd_add_if(mors,
+					       &mon_if->id, mors->macaddr, NL80211_IFTYPE_MONITOR);
+			if (ret)
+				MORSE_ERR(mors, "monitor interface add failed %d\n", ret);
+			else
+				MORSE_INFO(mors, "monitor interfaced added %d\n", mon_if->id);
+			mors->monitor_mode = true;
+		} else {
+			if (mon_if->id != INVALID_VIF_ID) {
+				morse_cmd_rm_if(mors, mon_if->id);
+				MORSE_INFO(mors, "monitor interfaced removed\n");
+			}
+			mon_if->id = INVALID_VIF_ID;
+			mors->monitor_mode = false;
+		}
+	}
+//=======================================================
+
+...
+exit:
+	mutex_unlock(&mors->lock);
+	return err;
+}
+```
+dans skbq.c tentative d'activation directment dans le préambule du packet
+```c
+int morse_skbq_skb_tx(struct morse_skbq *mq, struct sk_buff **skb_orig,
+		      struct morse_skb_tx_info *tx_info, u8 channel)
+{
+	struct morse_buff_skb_header hdr;
+	struct morse *mors;
+	size_t end_of_skb_pad;
+	struct sk_buff *skb = *skb_orig;
+	int ret = 0;
+	u8 *aligned_head;
+	u8 *data;
+...
+	if (tx_info)
+		memcpy(&hdr.tx_info, tx_info, sizeof(*tx_info));
+	else
+		memset(&hdr.tx_info, 0, sizeof(hdr.tx_info));
+
+
+	// ==============================================================
+	if (channel != MORSE_SKB_CHAN_MGMT && channel != MORSE_SKB_CHAN_COMMAND) {
+        
+        // On initialise le code de base (MCS 2, BW 2MHz)
+        hdr.tx_info.rates[0].morse_ratecode = MORSE_RATECODE_INIT(1, 0, 2, MORSE_RATE_PREAMBLE_S1G_SHORT);
+
+        // ACTIVATION MANUELLE LDPC (https://destevez.net/2025/01/decoding-ieee-802-11ah/)
+        // On force le bit B17 (Coding) et B18 (LDPC Extra)
+        // (1 << 17) | (1 << 18) = 0x60000
+        hdr.tx_info.rates[0].morse_ratecode |= cpu_to_le32(0x60000);
+
+        // Zéro retransmission
+        hdr.tx_info.rates[0].count = 1;
+
+        printk_ratelimited(KERN_INFO "MORSE_FPV: Hack SIG-1 (B17-B18) -> LDPC FORCE OK\n");
+    }
+    // ==============================================================
+
+	skb_push(skb, data - aligned_head);
+	morse_skb_header_put(&hdr, skb->data);
+	...
+	return ret
+}
+```
+pour l'instant pas de preuve que LDPC est bien actif...
+
 
 ## Avril
 

@@ -66,6 +66,9 @@ gantt
 ```
 
 ## Mars
+### Dimanche 01.03
+- Forcer le monitor mode
+
 
 ## Avril
 
