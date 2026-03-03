@@ -5,7 +5,7 @@ et font partie intégrante des exigences techniques du système.
 
 \begin{itemize}
     \item \textbf{Option A (Privilégiée) :} Protocole UDP Broadcast côté TX (Jetson) 
-    combiné à une réception en mode moniteur (Monitor Mode) via \texttt{libpcap} côté RX (RTOS).
+    combiné à une réception en mode moniteur (Monitor Mode) côté RX (RTOS).
     \item \textbf{Option B (Alternative performance) :} Diffusion brute (Raw Broadcast) 
     avec LDPC. C'est l'option la plus rapide mais la plus complexe techniquement.
     \item \textbf{Option C (Sécurité) :} Utilisation des exemples standards du 
@@ -78,7 +78,7 @@ et font partie intégrante des exigences techniques du système.
 & \textbf{E 7 :} Les options B (Raw) et C (Exemples) serviront de plans secondaires. \\
 \hline
 \textbf{FT 2 :} S'adapter aux limitations matérielles 
-& \textbf{E 8 :} L'architecture doit permettre la substitution du module TX (EKH19 par EKH05-01) en cas d'incompatibilité avec les modifications du pilote. \\
+& \textbf{E 8 :} L'architecture logicielle doit être compatible avec les différentes variantes de modules basés sur la puce MM8108. \\
 \end{longtable}
 
 \vspace{0.5cm}

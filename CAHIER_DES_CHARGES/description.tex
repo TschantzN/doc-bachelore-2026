@@ -26,11 +26,10 @@ de l'encodeur, en respectant les contraintes de basse latence jusqu'à l'afficha
 la station au sol.\newline
 \end{itemize}
 
-\textbf{Architecture matérielle flexible :}
+\textbf{Architecture matérielle :}
 \begin{itemize}
-    \item \textbf{Émission (TX) :}Encodeur vidéo $\rightarrow$ NVIDIA Jetson (OS Linux) $\rightarrow$ 
-Module Wi-Fi MM8108-EKH19 (Option de repli : EKH05-01 si l'EKH19 s'avère incompatible avec 
-les modifications du pilote).
-    \item \textbf{Réception (RX) :}Module Wi-Fi EKH05-01 (RTOS (FreeRTOS) pour minimiser la latence logicielle) 
+    \item \textbf{Émission (TX) :} Encodeur vidéo $\rightarrow$ NVIDIA Jetson (OS Linux) $\rightarrow$ 
+Module Wi-Fi Morse Micro MM8108.
+    \item \textbf{Réception (RX) :} Module Wi-Fi Morse Micro MM8108 (RTOS FreeRTOS) 
 $\rightarrow$ PC (Décodage et Affichage).
 \end{itemize}
