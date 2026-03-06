@@ -357,6 +357,86 @@ int morse_skbq_skb_tx(struct morse_skbq *mq, struct sk_buff **skb_orig,
 ```
 pour l'instant pas de preuve que LDPC est bien actif...
 
+### Vendredi 06.03
+- rechercher les parametre (MCS ldpc) dans le SDK.
+
+Dans ping.c on peut utiliser la fonction `mmwlan_ate_override_rate_control` dans `#include "mmwlan.h"`
+
+`\mm-iot-sdk\examples\ping\src\ping.c`
+```c
+    app_wlan_start();
+
+    set_debug_state(DEBUG_STATE_CONNECTED);
+
+	/******************************************************************/
+	// ate = automated test equipement (fonction utiliser en interne pour tester des configs précise)
+	enum mmwlan_status override_status = mmwlan_ate_override_rate_control(
+	    MMWLAN_MCS_1,      // tx_rate_override
+	    MMWLAN_BW_NONE,    // bandwidth_override
+	    MMWLAN_GI_NONE     // gi_override
+	);
+
+	if (override_status == MMWLAN_SUCCESS) {
+	    printf("SUCCES : Le MCS = 1\n");
+	} else {
+	    printf("ERREUR : Impossible de forcer le MCS (Code: %d)\n", override_status);
+	}
+	/******************************************************************/
+
+    /* Delay to allow communications to settle so we measure only idle current */
+    mmosal_task_sleep(150);
+
+    set_debug_state(DEBUG_STATE_CONNECTED_IDLE);
+```
+
+`\mm-iot-sdk\framework\morselib\include\mmwlan.h`
+```c
+/**
+ * Enable/disable override of rate control parameters.
+ *
+ * @param tx_rate_override      Overrides the transmit MCS rate. Set to @ref MMWLAN_MCS_NONE for no
+ *                              override.
+ * @param bandwidth_override    Overrides the TX bandwidth. Set to @ref MMWLAN_BW_NONE for no
+ *                              override.
+ * @param gi_override           Overrides the guard interval. Set to @ref MMWLAN_GI_NONE for no
+ *                              override.
+ *
+ * @return @ref MMWLAN_SUCCESS on success, else an appropriate error code.
+ */
+enum mmwlan_status mmwlan_ate_override_rate_control(enum mmwlan_mcs tx_rate_override,
+                                                    enum mmwlan_bw bandwidth_override,
+                                                    enum mmwlan_gi gi_override);
+```
+
+pour ce qui est de LDPC normalement il devrait être activer par défaut par wpa_supplicant au vue du .h il faudra expérimenter.
+pour l'instant c'est bon signe(`framework\src\hostap\wpa_supplicant\config_ssid.h:50`)
+```c
+#define DEFAULT_DISABLE_LDPC 0
+```
+
+
+- capture des paquets avec tcpdump. Il faut mettre l'interface en mode moniteur
+
+Enregistrement du .pcap
+
+C'est la commande `tcpdump -w` qui va générer le fichier.
+
+```bash
+sudo tcpdump -i wlan0 -s 0 -w capture_halow.pcap
+```
+
+**Explication de la commande :**
+
+* `sudo` : Nécessaire car écouter le trafic réseau demande des droits administrateur.
+* `-i wlan0` : Spécifie l'interface à écouter.
+* `-s 0` : Indique à tcpdump de capturer le paquet dans son intégralité (*Snaplength = 0*), et pas seulement les premiers octets. C'est pour voir les données complètes.
+* `-w capture_halow.pcap` : écrit tout dans le `.pcap`.
+
+une fois la `capture_halow.pcap` on peut l'analyser avec wireshark
+
+a faire:
+établir la liste de délivrable pour cdc et schéma.
+- les codes, la doc, les notes.
 
 ## Avril
 
