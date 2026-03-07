@@ -29,15 +29,15 @@ la station au sol.\newline
 \textbf{Architecture matérielle :}
 \begin{itemize}
     \item \textbf{Émission (TX) :} Encodeur vidéo $\rightarrow$ NVIDIA Jetson (OS Linux) $\rightarrow$ 
-Module Wi-Fi Morse Micro MM8108.
+Module Wi-Fi Morse Micro MM8108 (RTOS FreeRTOS).
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.65\linewidth]{imgs/Tx.png}
+    \includegraphics[width=0.7\linewidth]{imgs/Tx.png}
     \caption{Schéma Tx}
     \label{fig:Tx}
 \end{figure}
 
-    \item \textbf{Réception (RX) :} Module Wi-Fi Morse Micro MM8108 (RTOS FreeRTOS) 
+    \item \textbf{Réception (RX) :} Module Wi-Fi Morse Micro MM8108 
 $\rightarrow$ PC (Décodage et Affichage).
 \end{itemize}
 \begin{figure}[H]
