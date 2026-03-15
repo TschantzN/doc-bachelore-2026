@@ -1,0 +1,40 @@
+\section{Terminologie et concepts de base}
+\addcontentsline{toc}{section}{Terminologie et concepts clés}
+
+Afin de faciliter la lecture de ce document et la compréhension des enjeux techniques liés à la transmission 
+vidéo basse latence, les concepts et acronymes suivants seront couramment utilisés :
+
+\begin{description}
+    \item[Wi-Fi HaLow (IEEE 802.11ah) :] Amendement du standard Wi-Fi conçu pour opérer dans les bandes de 
+    fréquences inférieures à 1 GHz (Sub-1 GHz). Contrairement au Wi-Fi classique (2.4 GHz ou 5 GHz), il 
+    privilégie la portée (jusqu'à plusieurs kilomètres) et la capacité à traverser les obstacles physiques, 
+    au détriment de la bande passante maximale.
+    
+    \item[FPV (\textit{First Person View}) :] "Vol en immersion". Technique de pilotage où la caméra embarquée 
+    sur le drone transmet un flux vidéo en temps réel vers les lunettes ou l'écran du pilote, exigeant une 
+    latence extrêmement faible et constante.
+    
+    \item[NLOS (\textit{Non-Line-Of-Sight}) :] Situation de communication radio où l'émetteur et le récepteur 
+    ne sont pas en ligne de vue directe (présence de bâtiments, de végétation ou de relief). C'est dans ces 
+    conditions que les hautes fréquences perdent leur efficacité.
+    
+    \item[MCS (\textit{Modulation and Coding Scheme}) :] Indice (généralement de 0 à 10) définissant le débit 
+    physique de la transmission. Il combine un type de modulation radio (ex: BPSK, QAM) et un taux de codage. 
+    \textbf{Un MCS bas (ex: 1 ou 2)} offre un débit réduit, mais garantit une robustesse maximale face au bruit 
+    et aux interférences.
+    
+    \item[LDPC (\textit{Low-Density Parity-Check}) :] Algorithme avancé de correction d'erreurs (FEC). Contrairement 
+    au codage convolutif standard (BCC), le LDPC utilise des matrices de parité complexes permettant au récepteur de 
+    reconstruire des paquets de données corrompus par de mauvaises conditions radio, évitant ainsi de devoir redemander 
+    l'envoi du paquet (ce qui détruirait la latence vidéo).
+    
+    \item[Couches PHY et MAC :] Niveaux fondamentaux du modèle réseau. La \textbf{couche PHY} (Physique) gère la transformation 
+    des bits en ondes radio. La \textbf{couche MAC} (\textit{Media Access Control}) gère les règles d'accès à l'antenne et 
+    les retransmissions. Ce projet modifie directement ces couches pour les adapter au flux vidéo.
+    
+    \item[RTOS (\textit{Real-Time Operating System}) :] Système d'exploitation temps réel (comme FreeRTOS, utilisé sur 
+    le module de réception). Contrairement à un OS classique (comme Linux), un RTOS garantit l'exécution des tâches dans 
+    des délais stricts et déterministes, minimisant ainsi la latence logicielle (gigue) lors de l'affichage de la vidéo.
+\end{description}
+
+\vspace{1cm}

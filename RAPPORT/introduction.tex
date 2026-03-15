@@ -1,7 +1,47 @@
-\section{Introduction}
-Contexte large. (les drone FPV actuel utilise ...)
-problématique (Le WiFi standard 2.4 a 5.8 Ghz possède une capacitée de pénétration médiocre)
-objectifs du TB (Être en mesure d'établire le lien vidéo en utilisant le WiFi-HaLow 802.11.ah 
-et d'obtenir une latence suffisament base pour permettre le pilotage)
-Structure rapide du document.(étude de faisabilité sur les capacité d'un module WiFi).
+%\section{Introduction}
+%Contexte large. (les drone FPV actuel utilise ...)
+%problématique (Le WiFi standard 2.4 a 5.8 Ghz possède une capacitée de pénétration médiocre)
+%objectifs du TB (Être en mesure d'établire le lien vidéo en utilisant le WiFi-HaLow 802.11.ah 
+%et d'obtenir une latence suffisament base pour permettre le pilotage)
+%Structure rapide du document.(étude de faisabilité sur les capacité d'un module WiFi).
 
+\section{Introduction}
+
+\subsection{Contexte}
+Le pilotage de drones en immersion, communément appelé FPV (\textit{First Person View}), repose 
+sur un retour vidéo en temps réel. Pour garantir la sécurité du vol et la réactivité du pilote, 
+la fiabilité de la liaison radio et la minimisation de la latence sont absolument critiques. 
+Actuellement, la grande majorité des systèmes commerciaux reposent sur des liaisons fonctionnant 
+dans les bandes de fréquences de 2.4 GHz ou 5.8 GHz. Bien que ces hautes fréquences offrent une 
+large bande passante permettant le transfert de vidéos en haute définition, elles souffrent d'une 
+capacité de pénétration médiocre face aux obstacles physiques. En environnement urbain, forestier 
+ou industriel (conditions dites \textit{Non-Line-Of-Sight} ou NLOS), la portée de ces systèmes se 
+trouve drastiquement réduite, entraînant des dégradations ou des pertes de signal soudaines.
+
+\subsection{Problématique}
+Pour pallier ce manque de robustesse face aux obstacles, la norme IEEE 802.11ah, également connue 
+sous le nom de Wi-Fi HaLow, se présente comme une alternative technologique prometteuse. Opérant 
+dans la bande de fréquences Sub-1 GHz, elle offre intrinsèquement une portée kilométrique et une 
+excellente capacité à traverser les matériaux. Cependant, les standards Wi-Fi classiques n'ont 
+pas été conçus à l'origine pour transporter des flux vidéo continus et déterministes. Les 
+mécanismes standards d'adaptation de débit (\textit{Rate Control}) et les retransmissions 
+automatiques de paquets visent à garantir l'intégrité des données au détriment du temps de 
+livraison, ce qui peut introduire une gigue (\textit{jitter}) et une latence totalement 
+incompatibles avec les exigences strictes du vol FPV.
+
+\subsection{Objectifs du travail de Bachelor}
+L'objectif principal de ce projet est d'étudier, de concevoir et de valider un prototype de 
+transmission vidéo exploitant les avantages physiques du Wi-Fi HaLow, tout en garantissant une 
+latence suffisamment basse et stable pour le pilotage d'un drone. Pour y parvenir, ce travail 
+se concentre sur la modification du comportement d'une liaison Wi-Fi standard. L'enjeu 
+est de contourner les automatismes du réseau pour forcer matériellement une modulation robuste 
+et un codage correcteur d'erreurs constant, assurant ainsi une liaison déterministe même dans 
+des conditions de réception difficiles.
+
+\subsection{Structure du document}
+Ce rapport s'articule autour de plusieurs axes. Le chapitre suivant présente l'étude de faisabilité, 
+visant à valider la capacité matérielle et logicielle des composants choisis à accepter des modifications 
+bas niveau. Ensuite, nous détaillerons l'architecture du système mis en place, séparant l'émetteur embarqué 
+(TX) et la station de réception au sol (RX). Enfin, nous présenterons l'implémentation des modifications 
+au sein des pilotes matériels, suivie d'une analyse des performances et des mesures de latence obtenues 
+lors des essais pratiques.

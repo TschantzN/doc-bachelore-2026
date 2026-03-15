@@ -1,12 +1,52 @@
 \section{Étude de faisabilité}
+
 \subsection{But}
-Pour réaliser la connexion vidéo nous shouaitons établir un MCS donné et utilisé la technique de 
-correction d'erreur LDPC  (Low-Density Parity-Check). Il est donc nécessaire de déterminer si ces
-paramètre sont activable/modifiable dans le module wifi MM8108-EKH19 de Morse Micro que nous allons
-utiliser.
+Pour réaliser une transmission vidéo robuste face aux obstacles, notre stratégie repose sur le forçage 
+d'un MCS bas et l'utilisation systématique de la technique de correction d'erreurs LDPC. L'objectif de 
+cette étude de faisabilité est de déterminer si ces paramètres, généralement gérés dynamiquement par le 
+matériel, sont configurables manuellement sur les modules Wi-Fi Morse Micro MM8108 que nous utilisons 
+pour ce projet.
+
 \subsection{Méthodologie d'investigation}
-Dans premier temps, une lecture de la documentation a confirmer que aucune option "user-friendly"
-n'existe pour modifier  
-\subsection{Modification du pilote}
-\subsection{}
-\subsection{}
+Dans un premier temps, l'analyse de la documentation constructeur et des interfaces utilisateur 
+(\textit{user-friendly}) d'OpenWrt a révélé que si certains paramètres basiques sont accessibles 
+(comme le choix du canal ou de la largeur de bande), l'activation forcée du LDPC ou le verrouillage 
+strict du MCS ne sont pas exposés par les utilitaires standards (tels que \texttt{iw}, \texttt{morse\_cli} 
+ou \texttt{hostapd}). L'investigation s'est donc orientée vers l'ingénierie inverse et l'analyse du 
+code source des pilotes fournis par Morse Micro, tant pour l'environnement Linux (Émetteur) que pour 
+l'environnement FreeRTOS (Récepteur).
+
+\subsection{Faisabilité côté Émetteur (Linux / OpenWrt)}
+L'émetteur (TX) repose sur une architecture Linux. L'analyse du code source du pilote noyau (\textit{kernel driver}) 
+a permis d'identifier les points d'ancrage nécessaires :
+\begin{itemize}
+    \item \textbf{Contrôle du MCS :} Les fichiers sources \texttt{rc.c} et 
+    \texttt{command.c} contiennent les structures permettant de désactiver l'algorithme d'adaptation de débit\newline 
+    (\texttt{enable\_fixed\_rate}) et d'imposer un MCS fixe (par exemple, MCS 2).
+    \item \textbf{Activation du LDPC :} Le forçage du codage LDPC s'est avéré plus complexe, nécessitant une 
+    modification directe des en-têtes de paquets avant leur transmission à la puce via le bus USB. L'étude du 
+    fichier \texttt{skbq.c} a confirmé la possibilité d'intercepter les trames de données 
+    (\texttt{MORSE\_SKB\_CHAN\_MGMT}) et de manipuler le registre \texttt{morse\_ratecode}. En appliquant un 
+    masque binaire spécifique (forçage des bits B17 et B18 du champ SIG-1), il est théoriquement possible 
+    d'imposer le traitement LDPC au niveau matériel.
+\end{itemize}
+Des tests de compilation croisée (\textit{cross-compilation}) du noyau OpenWrt ont confirmé que ces modifications 
+logicielles peuvent être compilées sous forme de module (\texttt{morse.ko}) et injectées à chaud sur le routeur cible.
+
+\subsection{Faisabilité côté Récepteur (FreeRTOS)}
+Le récepteur (RX) utilise un système d'exploitation temps réel (FreeRTOS) pour minimiser la latence logicielle. 
+L'investigation du kit de développement logiciel (\texttt{mm-iot-sdk}) a nécessité la mise en place d'une chaîne de 
+compilation croisée sous Windows avec STM32CubeIDE.
+\begin{itemize}
+    \item L'analyse des bibliothèques a permis d'identifier la fonction interne \newline\texttt{mmwlan\_ate\_override\_rate\_control()} 
+    issue de \texttt{mmwlan.h}. Cette fonction de test (ATE) permet de verrouiller dynamiquement la bande passante et le 
+    MCS côté client.
+    \item Concernant le LDPC, l'inspection des configurations du démon \texttt{wpa\_supplicant} (\texttt{config\_ssid.h}) 
+    indique que cette fonctionnalité est activée par défaut par le pilote lors de la négociation de la connexion.
+\end{itemize}
+
+\subsection{Conclusion de la faisabilité}
+L'étude démontre que les objectifs du projet sont techniquement réalisables. Bien que les modules Morse Micro MM8108 
+ne prévoient pas nativement d'interface haut niveau pour verrouiller la couche physique à des fins de streaming vidéo, 
+l'accès au code source des pilotes Linux et du SDK FreeRTOS permet d'appliquer les "hacks" nécessaires pour forcer 
+l'utilisation d'un MCS robuste et du codage LDPC.
