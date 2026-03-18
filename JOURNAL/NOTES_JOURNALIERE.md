@@ -438,7 +438,7 @@ a faire:
 établir la liste de délivrable pour cdc et schéma.
 - les codes, la doc, les notes.
 
-### Jeudi 18.03
+### Mercredi 18.03
 
 #### Configuration du Débogage (STM32CubeIDE)
 
