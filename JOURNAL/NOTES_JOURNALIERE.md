@@ -438,6 +438,85 @@ a faire:
 établir la liste de délivrable pour cdc et schéma.
 - les codes, la doc, les notes.
 
+### Jeudi 18.03
+
+#### Configuration du Débogage (STM32CubeIDE)
+
+##### 1. Transformer le projet en "Projet ARM"
+
+* Clic droit sur le projet > *Properties* > *C/C++ Build* > *Toolchain Editor*.
+* Changer la "Current Toolchain" pour **MCU ARM GCC**.
+
+##### 2. Créer la Configuration de Debug
+
+* *Debug Configurations...*
+* **Onglet Main :**
+* **C/C++ Application :** Pointer vers le fichier binaire généré par la compilation (ex: `build/ping.elf`).
+* **Onglet Debugger :**
+* **Debug Probe :** Sélectionner `ST-LINK (ST-LINK GDB server)`.
+* **Interface :** Choisir `SWD` (Serial Wire Debug).
+* **ST-LINK S/N :** Cliquez sur *Scan* pour détecter l'ID unique de la carte EKH05.
+
+La sonde USB (ST-LINK) ne peut parler qu'à **un seul programme à la fois**. (putty cubeide)
+
+Pour ton journal de bord, le flashage du `config.hjson` est une étape de **provisionnement**. Contrairement au code C qui est l'intelligence de ton application, le Config Store est la "carte d'identité" et le "manuel de réglages" de ta puce Wi-Fi.
+
+Voici le résumé technique de cette procédure :
+
+#### 3. Flashage de la Configuration (Config Store)
+
+Cette étape est indispensable car la puce Morse Micro ne peut pas démarrer sans son micro-code (BCF) et ses paramètres régionaux (Country Code).
+
+##### Principe de fonctionnement
+
+Le flashage repose sur une architecture client-serveur :
+
+1. **Le Serveur (OpenOCD) :** Il crée un tunnel de communication entre le port USB et le processeur de la carte.
+2. **Le Client (Script Python) :** Il lit le fichier `.hjson`, prépare les données binaires, et les envoie au serveur pour les mettres dans une zone spécifique de la mémoire Flash (`0x08004000`).
+
+#### Procédure de flashage
+
+À chaque fois qu'on modif le SSID, le mot de passe ou le pays dans `config.hjson`, on doit : 
+
+##### Lancer le pont de communication (Terminal 1)
+
+Utilisez la version propre d'OpenOCD (xPack) https://github.com/xpack-dev-tools/openocd-xpack/releases/ pour éviter les récursions infinies des scripts ST :
+
+(dans mm-iot-sdk)
+```powershell
+C:\xpack-openocd-0.12.0-7\bin\openocd.exe -f framework/src/platforms/mm-mm6108-ekh05/openocd.cfg
+
+```
+
+*Laissez ce terminal ouvert. Il doit afficher `Listening on port 6666` ou 3333 etc.*
+
+##### Injecter les données (Terminal 2)
+
+Dossier `framework` et exécutez ce bloc qui prépare l'environnement et lance l'écriture :
+
+```powershell
+# Définition du chemin racine pour trouver le BCF
+$env:MMIOT_ROOT = "C:\Users\natha\OneDrive\Bureau\TB\mm-iot-sdk\framework"
+
+# Ajout de GDB au PATH pour que Python puisse l'utiliser
+$gdbPath = (Get-ChildItem -Path C:\ST\STM32CubeIDE_1.19.0 -Filter "arm-none-eabi-gdb.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName
+$env:PATH += ";$gdbPath"
+
+# Commande d'écriture finale
+python ./tools/platform/program-configstore.py -H localhost write-json ../examples/ping/config.hjson
+
+```
+
+1. **Erreur de Signature :** Le message `Invalid signature found` lors du premier flash est normal. Il indique que la mémoire était vierge avant l'écriture.
+
+??? pas encore sur 
+
+2. **Choix du BCF :** La carte utilise une puce **MM8108**. Il a fallu impérativement utiliser 
+le fichier de calibration `bcf_mf08651_us.mbin` (et non le 6108 par défaut) pour éviter l'erreur `Transport init failed (Chip ID 0x0000)`.
+
+3. **Variable d'environnement :** Sans l'outil `pipenv`, le script Python ne sait pas résoudre le symbole `$MMIOT_ROOT`. Il faut donc le déclarer manuellement dans PowerShell avant de lancer le script.
+
+
 ## Avril
 
 ## Mai
