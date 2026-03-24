@@ -712,6 +712,8 @@ tcpdump -i wlan0 -U -s 0 -w - "udp port 1337" | nc 192.168.12.10 9999
 ```
 en suite le .pcap peut être ouvert avec wireshark
 
+**TL;DR : Toutes les manips des quelques derniers jours ont été faites avec le routeur en mode AP mais ouvert (sans encryption ni mot de passe). Les envois UDP nécessitent une connexion préalable, puis une fois connecté, les paquets sont envoyés à l'adresse de broadcast du réseau (soit 192.168.12.255), ce qui permet au point d'accès (AP) de ne pas répondre avec des ACK le tout avec un MCS de 2 une BW de 2MHz et sur le channel US 30 (917MHz)**
+
 ## Avril
 
 ## Mai
