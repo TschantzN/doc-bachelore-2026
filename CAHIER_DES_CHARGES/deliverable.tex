@@ -6,15 +6,18 @@
     \begin{itemize}
         \item Dépôts Git contenant le code source modifié du pilote Morse Micro (MM8108) ainsi que les 
         directives de compilation.
-        \item Code source de l'application de réception développée sous FreeRTOS (basé sur le \textit{mm-iot-sdk}).
+        \item Code source de l'application d'émission (TX) développée sous FreeRTOS (basé sur le \textit{mm-iot-sdk}), 
+        ainsi que les scripts de réception sous OpenWrt.
         \item Ensemble des ressources de configuration (scripts ou fichiers de paramétrage) permettant 
-        la reproduction de l'environnement réseau de l'émetteur et du récépteur.
+        la reproduction de l'environnement réseau de l'émetteur et du récepteur.
     \end{itemize}
     
     \item \textbf{Livrables Documentaires (intégrés au rapport final) :}
     \begin{itemize}
-        \item \textbf{Rapport final :} Document central incluant l'analyse du pilote, les modifications effectuées 
-        pour le forçage du LDPC/MCS, ainsi que les protocoles et résultats des mesures de performance (latence, portée).
+        \item \textbf{Rapport final :} Document central détaillant l'analyse du pilote, les modifications bas 
+        niveau pour le forçage du LDPC et du MCS, ainsi que le développement et l'optimisation du code de 
+        l'application de transmission. Il inclura également les protocoles de test et les résultats des mesures 
+        de performances (latence, portée, débit maximal).
         \item \textbf{Guide de mise en œuvre :} Documentation technique détaillant les étapes d'installation, de 
         configuration et de déploiement du système complet.
         \item \textbf{Journal de bord :} Document retraçant chronologiquement les étapes de développement, les
@@ -24,6 +27,6 @@
     \item \textbf{Livrables pour la soutenance :}
     \begin{itemize}
         \item Poster scientifique synthétisant les enjeux et résultats du projet.
-        \item Support de présentation pour la défense orale devant le jury.
+        \item Support de présentation pour la défense orale.
     \end{itemize}
 \end{itemize}

@@ -516,6 +516,201 @@ le fichier de calibration `bcf_mf08651_us.mbin` (et non le 6108 par défaut) pou
 
 3. **Variable d'environnement :** Sans l'outil `pipenv`, le script Python ne sait pas résoudre le symbole `$MMIOT_ROOT`. Il faut donc le déclarer manuellement dans PowerShell avant de lancer le script.
 
+### Vendredi 20.03
+
+**GIGANTESQUE** coup de chance. le SDK a été update durant la semaine du crunch pour ajouter le support a la carte mm8108-ekh05 se qui explique bcf_mf08651_us.mbin
+
+Changer l'ip vers http://192.168.13.1/ pour laisser 192.168.12.1 au TX
+
+![settings MM8108 ping](imgs/setup_ekh19_ping.png)
+
+modif principales:
+(config.hjson)
+```json
+        /* The 2 letter country code to ensure the correct regulatory domain is used */
+        "wlan.country_code": "US"
+
+        /* If true use DHCP, else the static IP configuration will be used */
+        "ip.dhcp_enabled": "false"
+
+        /* These settings are ignored if DHCP is used, but mandatory if using static IP */
+		"ip.address": "192.168.12.50",
+		"ip.netmask": "255.255.255.0",
+		"ip.gateway": "192.168.12.1"
+
+		...
+        // "wlan.duty_cycle_mode": "bur
+		
+        "ping.target": "192.168.12.1"
+        "ping.count": "1000"
+        "ping.interval": "50"
+        "ping.size": "1450"
+
+```
+mm_app_loadconfig.c
+```c
+#ifndef STATIC_LOCAL_IP
+/** Statically configured IP address (if ENABLE_DHCP is not set). */
+#define STATIC_LOCAL_IP "192.168.12.2"
+#endif
+
+```
+
+
+**1: Déblocage matériel**
+Le problème initial : Le firmware STM32 plantait au démarrage (Transport init failed 0x0000). La communication SPI entre le MCU et la puce Wi-Fi ne se faisait pas.
+
+Le code C était compilé pour l'ancienne plateforme mm6108 car la target mm-mm8108-ekh05 n'éxistait pas encore dans le sdk.
+
+Par chance le SDK Morse Micro a été mis a jour durant la semaine du Crunch. Donc un pull a permis de récuperer la configuration mm-mm8108-ekh05.
+
+Configuration du BCF : Ajustement du fichier config.hjson pour cibler le fichier de calibration matériel exact de la puce (bcf_mf15457.mbin), paramétré sur la région US pour autoriser le canal de test.
+
+**2 : Configuration de l'infrastructure réseau (EKH19)**
+Mise en place de la carte EKH19 (intégrée au routeur GL.iNet MT3000) comme Point d'Accès (AP) via l'interface OpenWrt (LuCI).
+
+Configuration de l'interface ahwlan avec un canal large bande de 1 MHz (Canal 27 / 915.5 MHz) optimisé pour les tests longue portée et bas débit (MCS 1).
+
+**3 : Le routage**
+Le "Fallback" de l'IP : L'EKH05 refusait de prendre l'IP statique définie dans le JSON et retombait sur son IP de sécurité (192.168.1.2).
+
+Contournement : Modification directe dans le code C (mm_app_loadconfig.c) pour forcer l'IP source à 192.168.12.2 et s'aligner sur le sous-réseau du routeur.
+
+silence des Pings  : La liaison radio était établie (STA connected), mais les Pings subissaient 100% de pertes.
+
+Diagnostic avec tcpdump : L'analyse des trames a prouvé que l'EKH05 envoyait bien des requêtes ARP, prouvant que la radio fonctionnait. Cependant, le routeur ne répondait pas.
+
+La résolution du conflit IP : Découverte dans OpenWrt que l'interface Ethernet (lan) et l'interface Wi-Fi (ahwlan) possédaient toutes les deux exactement la même adresse IP (192.168.12.1). Le routeur bloquait le trafic par sécurité. Le changement de l'IP LAN (192.168.13.1)a débloqué le routage.
+
+**4 : Validation et Constats réglementaires**
+Succès du MCS : Preuve validée que l'API Morse Micro a bien forcé le module radio à transmettre en MCS 1, observable via la latence de base (~27 ms pour des paquets de 1450 octets).
+
+Le bridage Européen (ETSI) : Constat majeur : l'utilisation du domaine réglementaire EU (868 MHz) fait exploser la latence à ~670 ms à cause des obligations légales de partage des ondes (Listen Before Talk et restriction du Duty Cycle).
+
+Pour ce travail : Passage sur le domaine US (916.5 MHz) pour désactiver les bridages logiciels, permettant ainsi de mesurer les véritables performances brutes du changement de MCS sans interférence légale.
+
+*NORMALEMENT* cette fréquence n'est PAS utilisées officiellement... https://www.bakom.admin.ch/en/harmonised-frequency-ranges (entre 915 et 921 cela devrait aller)
+
+
+Après les test avec les pings ont passe au packet UDP et au monitor mode.
+
+### Samedi 21.03 - Dimanche 22.03
+#### 1. Les 5 modifications architecturales dans `udp_broadcast.c`
+
+
+* **Le ciblage de l'IP de Broadcast (Le "No-ACK") :**
+    * *Code :* `IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 255);`
+    * *Pourquoi :* En ciblant l'adresse de diffusion locale (`.255`), la couche réseau LwIP force l'en-tête MAC Wi-Fi à utiliser l'adresse de destination `FF:FF:FF:FF:FF:FF`. Selon la norme 802.11, les trames envoyées à cette adresse ne déclenchent aucun acquittement (ACK) de la part du récepteur. Cela supprime les renvois de paquets et garantit une latence réseau nulle.
+* **L'augmentation de la taille du Payload (Le MTU) :**
+    * *Code :* `pbuf_alloc(PBUF_TRANSPORT, 1400, PBUF_RAM);`
+    *Avec 1400 octets, nous nous approchons de la limite maximale d'une trame Ethernet standard. Cela diminue la taille des en-têtes (MAC + IP + UDP) par rapport aux données utiles, et diminuant l'overhead.
+* **Le mode d'envoie :**
+    * *Code :* Une boucle `for (int i = 0; i < 10; i++)` imbriquée dans la boucle principale.
+    * *Pourquoi :* Le système d'exploitation FreeRTOS de la carte gère le temps par "Ticks". Utiliser `mmosal_task_sleep(10)` entre chaque paquet briderait le processeur. En générant 10 paquets d'un coup (14 000 octets) avant de rendre la main au système (`mmosal_task_sleep(1)`), on sature intentionnellement la file d'attente TX de la couche MAC pour qu'elle émette (presque) en continu.
+* **Le forçage de la modulation (compromis Portée/Débit) comme précédement:**
+    * *Code :* `mmwlan_ate_override_rate_control(MMWLAN_MCS_2, MMWLAN_BW_2MHZ, MMWLAN_GI_NONE);`
+    * *Pourquoi :* Nous désactivons l'algorithme d'adaptation de débit (Rate Control) du SDK. Nous forçons le **MCS 2** sur **2 MHz** pour garantir une modulation robuste (QPSK) capable de traverser les murs. (tout ceci sur le channel 30 donc 917MHz) j'ai décaler la fréquence car la band width est passé à deux.
+* **La synchronisation LwIP:**
+    * *Code :* L'ajout de `while (!is_network_ready)` lié au `link_status_callback`.
+    * *Pourquoi :* Empêche l'application de crasher (Hard Fault) en essayant de transmettre avant que la pile réseau LwIP n'ait reçu son adresse IP statique et validé l'association Wi-Fi 802.11 avec le routeur.
+
+
+**Après mesure je recois environ 120 packet de 1400 octets par secondes en moyenne soit une vitesse de 1.344 Mbps** 
+
+#### Caclue du Débit Brut en 24 bits couleur nécessaire pour de la vidéo
+
+L'équation du débit brut (non compressé) est la suivante :
+
+$$D_{brut} = W \times H \times F \times B_{pp}$$
+
+Où :
+* $W$ : Largeur en pixels
+* $H$ : Hauteur en pixels
+* $F$ : Fréquence d'images (24 fps)
+* $B_{pp}$ : Profondeur de couleur (24 bits/pixel)
+
+**Pour la 720p (1280x720) :**
+$$D_{brut\_720p} = 1280 \times 720 \times 24 \times 24 = 530841600 \text{ bps}$$
+Soit **~530.8 Mbps**.
+
+**Pour la 480p (854x480) :**
+$$D_{brut\_480p} = 854 \times 480 \times 24 \times 24 = 236113920 \text{ bps}$$
+Soit **~236.1 Mbps**.
+
+#### 2. Le Débit Compressé (H.264)
+
+La norme de compression vidéo H.264 (AVC) est le standard pour le streaming temps réel. Un encodeur H.264 configuré pour du streaming peut atteindre un **ratio de compression de 1:200** (il écrase la taille des données par 200).(par contre le clarté et netteté ne sera peut être pas éxcellente)
+
+L'équation du débit compressé devient :
+
+$$D_{cible} = \frac{D_{brut}}{C_{ratio}}$$
+
+Où $C_{ratio}$ est le facteur de compression (200).
+
+**Pour la 720p compressée :**
+$$D_{cible\_720p} = \frac{530.8 \text{ Mbps}}{200} \approx 2.65 \text{ Mbps}$$
+
+**Pour la 480p compressée :**
+$$D_{cible\_480p} = \frac{236.1 \text{ Mbps}}{200} \approx 1.19 \text{ Mbps}$$
+
+#### 3. Le Bilan
+
+pour MCS 2 / 2 MHz.
+
+* **Le scénario 720p (2.12 Mbps) :** Le flux vidéo exigera **~60% de débit en plus** que ce que la carte radio peut fournir.
+* **Le scénario 480p (0.94 Mbps) :** Le flux vidéo consommera environ **70% de la capacité réseau**. Les 30% restants (**~400 kbps**) nous donne une bonne marge (on pourrait même réduire la compréssion ou de pallier a des interférences et des ralentissment).
+
+Ces équations prouvent mathématiquement que la 480p à 24 fps est le réalisable pour la liaison radio Sub-1GHz optimisée pour la portée.
+
+
+### Mardi 24.03
+
+correction d'erreurs dans le cahier des charges et mise a jour des notes journalières et du journal de travail.
+
+pip des packets UDP du routeur au PC en lancant ce script
+```py
+import socket
+
+TCP_IP = "0.0.0.0"
+TCP_PORT = 9999
+
+# On crée un serveur TCP (SOCK_STREAM)
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.bind((TCP_IP, TCP_PORT))
+sock.listen(1)
+
+print(f"En attente de la connexion du routeur sur le port TCP {TCP_PORT}...")
+conn, addr = sock.accept()
+print(f"Routeur connecté depuis {addr} ! Enregistrement en cours...")
+
+packets_received = 0
+
+with open("analyse_pkt_udp.pcap", "wb") as f:
+    try:
+        while True:
+            data = conn.recv(4096)
+            if not data:
+                break
+            
+            f.write(data)
+            f.flush()
+            
+            packets_received += 1
+            if packets_received % 50 == 0:
+                print(f"   -> {packets_received} blocs de données enregistrés...")
+                
+    except KeyboardInterrupt:
+        print("\nFin de la capture")
+
+print(f"Fichier 'analyse_pkt_udp.pcap' sauvegardé")
+conn.close()
+sock.close()
+```
+et cette commande dans openwrt
+```bash
+tcpdump -i wlan0 -U -s 0 -w - "udp port 1337" | nc 192.168.12.10 9999
+```
+en suite le .pcap peut être ouvert avec wireshark
 
 ## Avril
 

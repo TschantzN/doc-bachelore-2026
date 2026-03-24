@@ -1,11 +1,14 @@
 \section{Fonctions et exigences du système}
 Pour pallier le manque de documentation et gérer la complexité, trois stratégies de 
 communication ont été identifiées. Elles sont classées par ordre de préférence 
-et font partie intégrante des exigences techniques du système.
+et font partie intégrante des exigences techniques du système. De plus, l'implémentation physique 
+se déclinera sur différents modules d'évaluation (EKH05 et EKH19) qui implémentent cette puce.
+La station de réception (RX) s'appuiera probablement sur le modèle EKH19 afin de pouvoir exploiter le système d'exploitation OpenWrt. 
+Quant au Transmetteur (TX), il sera probablement basé sur le modèle EKH05 piloté par FreeRTOS.
 
 \begin{itemize}
     \item \textbf{Option A (Privilégiée) :} Protocole UDP Broadcast côté TX (Jetson) 
-    combiné à une réception en mode moniteur (Monitor Mode) côté RX (RTOS).
+    combiné à une réception en mode moniteur (Monitor Mode) côté RX.
     \item \textbf{Option B (Alternative performance) :} Diffusion brute (Raw Broadcast) 
     avec LDPC. C'est l'option la plus rapide mais la plus complexe techniquement.
     \item \textbf{Option C (Sécurité) :} Utilisation des exemples standards du 
@@ -49,6 +52,8 @@ et font partie intégrante des exigences techniques du système.
 & \textbf{E 5 :} Assurer le décodage et l'affichage sur la station de recéption. \\
 \end{longtable}
 
+
+
 \vspace{0.5cm}
 
 \begin{longtable}{|p{6cm}|p{9cm}|}
@@ -78,7 +83,8 @@ et font partie intégrante des exigences techniques du système.
 & \textbf{E 7 :} Les options B (Raw) et C (Exemples) serviront de plans secondaires. \\
 \hline
 \textbf{FT 2 :} S'adapter aux limitations matérielles 
-& \textbf{E 8 :} L'architecture logicielle doit être compatible avec les différentes variantes de modules basés sur la puce MM8108. \\
+& \textbf{E 8 :} L'architecture logicielle doit être compatible avec les différentes variantes de 
+modules basés sur la puce MM8108 (EKH05 et EKH19).\\
 \end{longtable}
 
 \vspace{0.5cm}
