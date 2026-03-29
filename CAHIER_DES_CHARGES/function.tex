@@ -3,17 +3,21 @@ Pour pallier le manque de documentation et gérer la complexité, trois stratég
 communication ont été identifiées. Elles sont classées par ordre de préférence 
 et font partie intégrante des exigences techniques du système. De plus, l'implémentation physique 
 se déclinera sur différents modules d'évaluation (EKH05 et EKH19) qui implémentent cette puce.
-La station de réception (RX) s'appuiera probablement sur le modèle EKH19 afin de pouvoir exploiter le système d'exploitation OpenWrt. 
-Quant au Transmetteur (TX), il sera probablement basé sur le modèle EKH05 piloté par FreeRTOS.
+La station de réception (RX) s'appuiera probablement sur le modèle EKH19 afin de pouvoir exploiter le système 
+d'exploitation OpenWrt. Quant au Transmetteur (TX), il sera probablement basé sur le modèle EKH05 piloté par 
+FreeRTOS.\newline
+
+Les stratégies de communication réseau listées ci-dessous constituent des hypothèses de travail définies en début de 
+projet. Elles ne sont pas figées et servent de base d'investigation. L'objectif principal reste l'optimisation des 
+performances, ce qui inclut la liberté de pivoter vers une solution hybride si les tests sur le matériel révèlent 
+une approche plus efficace.
 
 \begin{itemize}
-    \item \textbf{Option A (Privilégiée) :} Protocole UDP Broadcast côté TX (Jetson) 
+    \item \textbf{Option A (Privilégiée) :} Protocole UDP Broadcast côté TX
     combiné à une réception en mode moniteur (Monitor Mode) côté RX.
-    \item \textbf{Option B (Alternative performance) :} Diffusion brute (Raw Broadcast) 
-    avec LDPC. C'est l'option la plus rapide mais la plus complexe techniquement.
-    \item \textbf{Option C (Sécurité) :} Utilisation des exemples standards du 
-    constructeur. Solution techniquement simple mais avec des performances potentiellement 
-    trop faibles.
+    \item \textbf{Option B (Alternative performance) :} Diffusion brute des données (Raw Broadcast, pas de protocole) 
+    avec LDPC. C'est l'option la plus optimisée mais la plus complexe techniquement.
+    \item \textbf{Option C (Sécurité) :} Utilisation des exemples standards du constructeur. Solution techniquement simple mais avec des performances potentiellement trop faibles.
 \end{itemize}
 
 \vspace{0.5cm}
@@ -47,12 +51,10 @@ Quant au Transmetteur (TX), il sera probablement basé sur le modèle EKH05 pilo
 & \textbf{E 3 :} Activer la correction d'erreur LDPC. \\
 \hline
 \textbf{FS 2 :} Transmettre un flux vidéo (Objectif Final) 
-& \textbf{E 4 :} Interfacer l'encodeur vidéo avec la carte Jetson. \\
+& \textbf{E 4 :} Interfacer la puce MM8108 avec la carte Jetson (l'encodeur vidéo). \\
 \cline{2-2}
-& \textbf{E 5 :} Assurer le décodage et l'affichage sur la station de recéption. \\
+& \textbf{E 5 :} Assurer le décodage et l'affichage sur la station de réception. \\
 \end{longtable}
-
-
 
 \vspace{0.5cm}
 
@@ -78,13 +80,12 @@ Quant au Transmetteur (TX), il sera probablement basé sur le modèle EKH05 pilo
 \endlastfoot
 
 \textbf{FT 1 :} Assurer la communication 
-& \textbf{E 6 :} Implémenter la communication selon l'Option A (UDP Broadcast / Monitor mode) en priorité. \\
+& \textbf{E 6 :} Implémenter la communication selon l'Option A (UDP Broadcast / Monitor mode) en priorité. (Ou solution permettant des performances similaires) \\
 \cline{2-2}
 & \textbf{E 7 :} Les options B (Raw) et C (Exemples) serviront de plans secondaires. \\
 \hline
 \textbf{FT 2 :} S'adapter aux limitations matérielles 
-& \textbf{E 8 :} L'architecture logicielle doit être compatible avec les différentes variantes de 
-modules basés sur la puce MM8108 (EKH05 et EKH19).\\
+& \textbf{E 8 :} L'architecture logicielle doit être compatible avec les différentes variantes de modules basés sur la puce MM8108 (EKH05 et EKH19).\\
 \end{longtable}
 
 \vspace{0.5cm}
@@ -111,7 +112,7 @@ modules basés sur la puce MM8108 (EKH05 et EKH19).\\
 \endlastfoot
 
 \textbf{FC 1 :} Respecter la contrainte temps 
-& \textbf{E 9 :} Réalisable en 450 heures. Le MVP fait foi si l'objectif final (idéale) n'a pas pu être réalisé. \\
+& \textbf{E 9 :} Réalisable en 450 heures. Le MVP fait foi si l'objectif final (idéal) n'a pas pu être réalisé. \\
 \hline
 \textbf{FC 2 :} Composer avec la documentation limitée 
 & \textbf{E 10 :} Justifier les choix techniques basés sur l'ingénierie inverse et les tests empiriques. \\

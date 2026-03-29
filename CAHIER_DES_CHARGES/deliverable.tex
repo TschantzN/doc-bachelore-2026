@@ -4,24 +4,18 @@
 \begin{itemize}
     \item \textbf{Livrables Techniques :}
     \begin{itemize}
-        \item Dépôts Git contenant le code source modifié du pilote Morse Micro (MM8108) ainsi que les 
-        directives de compilation.
-        \item Code source de l'application d'émission (TX) développée sous FreeRTOS (basé sur le \textit{mm-iot-sdk}), 
-        ainsi que les scripts de réception sous OpenWrt.
-        \item Ensemble des ressources de configuration (scripts ou fichiers de paramétrage) permettant 
-        la reproduction de l'environnement réseau de l'émetteur et du récepteur.
+        \item Dépôts Git contenant le code source modifié du pilote Morse Micro (MM8108) ainsi que les directives de compilation.
+        \item Code source des applications de transmission (TX) gérant l'acquisition vidéo, le contrôle de flux (interface SPI ou USB/réseau) et l'émission radio.
+        \item Scripts de réception, de configuration du réseau et de décodage pour la station au sol.
+        \item Ensemble des ressources de configuration permettant la reproduction de l'environnement réseau de l'émetteur et du récepteur.
     \end{itemize}
     
     \item \textbf{Livrables Documentaires (intégrés au rapport final) :}
     \begin{itemize}
-        \item \textbf{Rapport final :} Document central détaillant l'analyse du pilote, les modifications bas 
-        niveau pour le forçage du LDPC et du MCS, ainsi que le développement et l'optimisation du code de 
-        l'application de transmission. Il inclura également les protocoles de test et les résultats des mesures 
-        de performances (latence, portée, débit maximal).
-        \item \textbf{Guide de mise en œuvre :} Documentation technique détaillant les étapes d'installation, de 
-        configuration et de déploiement du système complet.
-        \item \textbf{Journal de bord :} Document retraçant chronologiquement les étapes de développement, les
-        défis techniques rencontrés et les décisions prises durant le projet.
+        \item \textbf{Rapport final :} Document central détaillant l'analyse du pilote et du SDK, les modifications bas niveau pour le forçage du LDPC et du MCS, ainsi que le développement de l'architecture de transmission. 
+        Il inclura également les protocoles de test et les résultats des mesures de performances (latence "Glass-to-Glass", portée NLOS, débit maximal).
+        \item \textbf{Guide de mise en œuvre :} Documentation technique détaillant les étapes d'installation, de configuration et de déploiement du système complet.
+        \item \textbf{Journal de bord :} Document retraçant chronologiquement les étapes de développement, les tests empiriques (optimisation des buffers, handshake, réglages GStreamer) et les décisions techniques prises durant le projet.
     \end{itemize}
     
     \item \textbf{Livrables pour la soutenance :}
