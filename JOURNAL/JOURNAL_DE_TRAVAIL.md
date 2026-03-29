@@ -203,7 +203,7 @@ gantt
 
     section RX (OpenWrt & PC)
     Désactivation Chiffrement & Monitor Mode :done, rx1, 2026-03-01, 2026-03-06
-    Désactivation Chiffrement mais mode AP :done, rx2, 2026-03-20, 2026-03-24
+    Désactivation Chiffrement mais mode AP ouvert :done, rx2, 2026-03-20, 2026-03-24
     Tunnel Réseau (tcpdump, Netcat, TCP) :done, rx3, 2026-03-20, 2026-03-24
     Scripting d'analyse (Python/Wireshark) :active, rx4, 2026-03-24, 2026-04-20
     Implémentation Pipeline Vidéo (PC) :rx5, 2026-04-20, 2026-06-14
@@ -225,6 +225,85 @@ gantt
     Finalisation & Mise en page :doc6, 2026-07-11, 2026-07-23
     Rendu final              :milestone ,2026-07-23, 0d
 ```
+
+### Jeudi 26.03 
+* Tentative de configuration d'une liaison USB entre la Jetson et le STM32 pour le transfert vidéo.
+
+### Vendredi 27.03 
+* Abandon de l'USB suite à des instabilités de connexion (déconnexions intempestives).
+* Bascule sur le protocole SPI. Setup de la Jetson Nano (configuration des pins via `jetson-io`, installation de `spidev`).
+(pin sur le ekh05 trouver via multimetre car impossible de trouver le schéma de routage)
+* Écriture d'un script Python de test pour valider l'envoi de trames factices (*dummy payload*) sur le bus SPI à 2 MHz.
+
+### Samedi 28.03 
+* **Mise en place du pipeline de bout en bout :** Caméra rpi Camera Module 2 -> Jetson (encodage H.265) -> SPI -> STM32 -> Wi-Fi HaLow (UDP Broadcast) -> Routeur OpenWrt (Bridge) -> PC Windows (GStreamer Direct3D11).
+* **Configuration réseau :** Configuration du pont logiciel (`brctl`) sur OpenWrt pour ponter directement `wlan0` vers l'Ethernet, gagnant ainsi 10 à 20 ms de traitement (plus besoin de tcpdump et netcat).
+* Migration du script d'envoi Jetson de Python vers C pour supprimer la latence induite par le python et stabiliser les envois.
+* **Première mesure de performance :** Latence *Glass-to-Glass* estimée à 170-200 ms avec un flux 720p à 30fps. tester avec 
+de la 480p 60fps également pour environ la même latence.
+
+### Dimanche 29.03
+* **Optimisation matérielle (Handshake) :** Remplacement des délais logiciels (`usleep`) par un contrôle matériel. Configuration du GPIO 78 (Jetson) et PD15 (STM32) pour empêcher la Jetson d'inonder le buffer SPI du STM32.
+* **Premiers tests de portée (Range Tests) avec flux vidéo 480p/720p :**
+    * Intérieur (30m) : Traversée de murs extrêmement épais (bunker) validée (avec orientation d'antenne).
+    * Extérieur (160m) : Traversée d'un mur de ferme (40cm) + végétation (arbres) validée avec une image fluide jusqu'à la limite de rupture.
+
+```mermaid
+gantt
+    title Planning 450h
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d/%m
+
+    excludes 2026-03-09,2026-03-10,2026-03-11,2026-03-12,2026-03-13,2026-04-06,2026-04-07,2026-04-08,2026-04-09,2026-04-10
+    
+    section Indisponible
+    Crunch      :2026-03-09, 2026-03-14
+    Vacances    :2026-04-06, 2026-04-11
+
+    section Initialisation & Faisabilité
+    Faisabilité Driver :done, p1, 2026-02-16, 2026-02-28
+    Setup SDK MM       :done, p2, 2026-03-01, 2026-03-06
+    Recherche param SDK & Test flash EKH05 :done, p3, 2026-03-06, 2026-03-20
+    Test flash ekh05         :done,milestone ,2026-03-18, 0d
+
+    section TX (FreeRTOS)
+    Architecture UDP Broadcast :done, tx1, 2026-03-20, 2026-03-24
+    Packet de test & Burst LwIP :done, tx2, 2026-03-20, 2026-03-24
+    Forçage PHY (MCS 2, 2MHz) :done, tx3, 2026-03-20, 2026-03-24
+    Validation débit UDP (1.34 Mbps) :done,milestone ,2026-03-22, 0d
+    Interface Encodeur Vidéo (Jetson) :done, tx4, 2026-03-25, 2026-03-29
+    Contrôle de flux matériel (Handshake GPIO) :done, tx4b, 2026-03-28, 2026-03-29
+    Tests de charge , jitter et range :active, tx5, 2026-03-29, 2026-06-14
+
+    section RX (OpenWrt & PC)
+    Désactivation Chiffrement & Monitor Mode :done, rx1, 2026-03-01, 2026-03-06
+    Désactivation Chiffrement mais mode AP ouvert:done, rx2, 2026-03-20, 2026-03-24
+    Tunnel Réseau (tcpdump, Netcat, TCP) :done, rx3, 2026-03-20, 2026-03-24
+    Scripting d'analyse (Python/Wireshark) :active, rx4, 2026-03-24, 2026-04-20
+    Pontage Réseau (Bridge) :done, rx4b, 2026-03-26, 2026-03-28
+    Implémentation Pipeline Vidéo (PC) :done, rx5, 2026-03-27, 2026-03-29
+    Validation MVP (Latence ~200ms) :done,milestone, 2026-03-29, 0d
+    Optimisation Latence & GStreamer :active, rx6, 2026-03-30, 2026-05-15
+
+    section Post-Semestre (40h/sem)
+    Intégration Drone & Optimisations finales :crit, int1, 2026-06-15, 2026-07-08
+    Tests Terrain (Portée & NLOS)    :int2, 2026-07-08, 2026-07-23
+    Préparation Défense              :int3, 2026-07-16, 2026-07-23
+
+    section Documentation
+    Rédaction du CDC         :done, doc1, 2026-02-16, 2026-03-09
+    CDC validé               :done, milestone ,2026-03-09, 0d
+    correction détail CDC    :done, doc2, 2026-03-24, 1d
+    CDC revalidé             :active, milestone ,2026-03-27, 0d
+    Journal de travail       :active, doc3, 2026-02-16, 2026-07-23
+    Rapport - Intro & Faisabilité :done,doc4, 2026-02-27, 2026-03-21
+    Rapport - Architecture Système :active,doc4b, 2026-03-29, 2026-05-10
+    Rapport - Réalisation & Mesures :doc5, 2026-05-11, 2026-07-10
+    Rendu intermédiaire        :milestone ,2026-05-20, 0d
+    Finalisation & Mise en page :doc6, 2026-07-11, 2026-07-23
+    Rendu final                :milestone ,2026-07-23, 0d
+```
+
 
 ## Avril
 
