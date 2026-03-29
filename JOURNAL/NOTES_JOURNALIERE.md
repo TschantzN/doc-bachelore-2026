@@ -713,6 +713,794 @@ tcpdump -i wlan0 -U -s 0 -w - "udp port 1337" | nc 192.168.12.10 9999
 en suite le .pcap peut être ouvert avec wireshark
 
 **TL;DR : Toutes les manips des quelques derniers jours ont été faites avec le routeur en mode AP mais ouvert (sans encryption ni mot de passe). Les envois UDP nécessitent une connexion préalable, puis une fois connecté, les paquets sont envoyés à l'adresse de broadcast du réseau (soit 192.168.12.255), ce qui permet au point d'accès (AP) de ne pas répondre avec des ACK le tout avec un MCS de 2 une BW de 2MHz et sur le channel US 30 (917MHz)**
+### Jeudi 26.03 
+tentative de setup de l'USB
+
+### Vendredi 27.03 
+L'USB est reconnu mais se fait déco, probablement un problème de stabilité.
+on oubli l'USB et on par sur du SPI.
+Setup de la jetson nano 2G dev kit.
+faire un réseau partager depuis le telephone puis ssh jetsontb@10.120.243.168 ensuite installer pip3 puis spidev. ensuite setup l'interface SPI avec sudo /opt/nvidia/jetson-io/jetson-io.py et sélection de SPI1 (set pin manually) puis 
+reboot.
+test d'envoie
+```py
+import spidev
+import time
+
+# Initialisation du bus SPI (Bus 0, Chip Select 0 -> /dev/spidev0.0)
+spi = spidev.SpiDev()
+spi.open(0, 0)
+
+# Configuration : 2 MHz pour le test, Mode 0 (standard)
+spi.max_speed_hz = 2000000
+spi.mode = 0
+
+print("--- Transmission SPI demarree ---")
+print("Appuyez sur Ctrl+C pour arreter.")
+
+try:
+    while True:
+        # On cree un faux paquet video de 32 octets pour le test
+        # Le paquet commence par 0xDE, 0xAD, 0xBE, 0xEF pour qu on le reconnaisse facilement
+        dummy_payload = [0xDE, 0xAD, 0xBE, 0xEF] + [i % 256 for i in range(28)]
+
+        # Envoi des donnees sur la broche MOSI
+        spi.xfer2(dummy_payload)
+
+        print("Paquet envoye")
+        time.sleep(1) # On envoie 1 paquet par seconde pour le test
+
+except KeyboardInterrupt:
+    spi.close()
+    print("\nArret du test SPI.")
+```
+
+mettre le nouveau script
+
+expliquer comment trouver les pin avec le multimetre
+spi fonctionnel mais plus faible débit que réaliser précédement
+activer spi dans core inc ou un truc du genre
+
+### Samedi 28.03 
+
+transmission d'un flux vidéo 720p, encodage en H.265, puis bus SPI vers un microcontrôleur, qui le diffuse en Broadcast. OpenWrt réceptionne les packet et la ponte directement vers le PC le décodage.
+
+**Caméra CSI** ➡️ **Jetson (H.265)** ➡️ *(SPI @ 5MHz)* ➡️ **STM32** ➡️ *(Wi-Fi HaLow UDP Broadcast)* ➡️ **Routeur OpenWrt (Bridge)** ➡️ *(Ethernet)* ➡️ **PC Windows (Direct3D11)**
+
+#### 2. Topologie Réseau (Subnet `192.168.12.x`) RESUMe Générale
+
+Pour éviter les conflits de routage sur l'OS récepteur, le réseau FPV est strictement isolé, sans accès Internet croisé.
+
+| Équipement | Rôle | Adresse IP | Note de configuration réseau |
+| :--- | :--- | :--- | :--- |
+| **PC Windows** | Afficheur (GStreamer) | `192.168.12.10` | **Passerelle par défaut : VIDE.** Masque : `255.255.255.0` |
+| **OpenWrt** | Routeur / Pont radio | `192.168.12.1` | Pont logiciel (Bridge) obligatoire entre `wlan0` et l'Ethernet |
+| **STM32** | Émetteur Radio | `192.168.12.2` | Émet vers l'IP Broadcast `192.168.12.255` |
+
+
+#### 3. Configuration générale
+##### A. La Ground Station (PC Windows)
+* **Pipeline GStreamer :** Utilisation de l'accélération matérielle Direct3D11(de du proc graphique) pour améliorer la durée décodage. Désactivation de la synchronisation logicielle pour un affichage immédiat.
+* **Commande d'écoute :**
+  ```bash
+  ./gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! h265parse config-interval=-1 ! d3d11h265dec ! d3d11videosink sync=false async=false
+  ```
+
+##### B. Le Relais Radio (Routeur OpenWrt)
+* Par défaut, OpenWrt isole le WLAN et le LAN. Il faut forcer le bridge matériel pour que le flux Broadcast traverse le routeur directement, sans traitement CPU (pas de TCPDump, ni Netcat (ca a fait gagner 10 a 20 ms de traitement)).
+* **Commande de pontage (Bridge) :**
+  ```bash
+  brctl addif br-ahwlan wlan0
+  # car
+  
+  root@MM8108_EKH19:~> brctl show
+  bridge name     bridge id               STP enabled     interfaces
+  br-ahwlan               7fff.9483c470d038       no              eth1
+  root@MM8108_EKH19:~> brctl addif br-ahwlan wlan0
+  root@MM8108_EKH19:~> brctl show
+  bridge name     bridge id               STP enabled     interfaces
+  br-ahwlan               7fff.9483c470d038       no              wlan0
+                                                        eth1
+  ```
+
+##### C. L'Émetteur Radio (STM32)
+* Envoi en UDP Broadcast pour éviter les attentes d'accusés de réception (ACK) du protocole Wi-Fi standard.
+* **Configuration C (LwIP) :** L'IP de destination (`dest_ip`) doit être configurée sur l'adresse de diffusion locale.
+  ```c
+  IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 255);
+  ```
+
+##### D. L'encodeur Vidéo (Nvidia Jetson)
+* **Contrainte logicielle :** Passage du script Python initial à un programme en C pour supprimer les allocations mémoire dynamiques et utiliser des horloges système précises (`usleep`).
+* **Contrôle de Flux (Flow Control) :** Injection d'un délai fixe de **1 milliseconde** entre chaque bloc SPI de 1400 octets pour éviter de noyer la RAM du STM32 (Buffer Overrun).
+* **Pipeline GStreamer (intégré au code C) :** Mode UltraFast, CBR 1 Mbps, Zéro-Buffer OS (`setvbuf`).
+  ```bash
+  gst-launch-1.0 -q nvarguscamerasrc ! 'video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1' ! nvv4l2h265enc bitrate=1000000 control-rate=1 insert-sps-pps=true idrinterval=15 maxperf-enable=1 preset-level=1 ! h265parse ! video/x-h265,stream-format=byte-stream ! fdsink fd=1 sync=false
+  ```
+
+#### 4. Performances Actuelles (Baseline v1.0)
+
+* **Résolution :** 1280x720 (720p)
+* **Framerate :** 30 FPS
+* **Bitrate Vidéo :** 1 Mbps (Constant Bit Rate)
+* **Taille des trames SPI :** 1400 octets (MTU compatible)
+* **Latence "Glass-to-Glass" moyenne :** ~170 à 200 ms (Mesurée via chronomètre à l'écran).
+* **Stabilité :** Fluide, mais pas idéale a cause de à la méthode d'attente logicielle (`usleep`). (Idéalement il faudrait que le MCU nous annonce quand il a de la mémoire à dispo pour que l'attente soit opti)
+
+
+envoie de la vidéo en python
+```bash
+sudo apt-get install python3-opencv
+```
+```py
+import spidev
+import time
+import subprocess
+import sys
+
+# Config SPI
+spi = spidev.SpiDev()
+spi.open(0, 0)
+spi.max_speed_hz = 5000000 # 5 MHz
+spi.mode = 0
+
+CHUNK_SIZE = 1400
+
+# GStreamer H.265
+gst_cmd = [
+    "gst-launch-1.0", "-q",
+    "nvarguscamerasrc", "!",
+    "video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1", "!",
+    "nvv4l2h265enc", "bitrate=1000000", "control-rate=1", "insert-sps-pps=true", "idrinterval=15", "maxperf-enable=1", "preset-level=1", "!",
+    "h265parse", "!",
+    "video/x-h265,stream-format=byte-stream", "!",
+    "fdsink", "fd=1", "sync=false", "async=false"
+]
+
+print(">>> Démarrage du flux Caméra H265 vers SPI...")
+
+# lancement GStreamer
+p = subprocess.Popen(gst_cmd, stdout=subprocess.PIPE, bufsize=CHUNK_SIZE)
+
+try:
+    while True:
+        # 1400 octets de vidéo
+        chunk = p.stdout.read(CHUNK_SIZE)
+        
+        if not chunk:
+            print("Fin du flux vidéo ou erreur de la caméra.")
+            break
+        
+        if len(chunk) < CHUNK_SIZE:
+            chunk = chunk + b'\x00' * (CHUNK_SIZE - len(chunk))
+            
+        # On balance sur le SPI
+        spi.writebytes2(chunk)
+        time.sleep(0.001)
+except KeyboardInterrupt:
+    print("\nArrêt")
+finally:
+    p.terminate()
+    spi.close()
+    print("Fermeture terminée.")
+
+```
+envoie de la vidéo en c
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev0.0"
+
+int main() {
+    int spi_fd;
+    uint32_t mode = 0;
+    uint32_t speed = 5000000; // 5 MHz
+    uint8_t bits = 8;
+
+    printf(">>> Initialisation du SPI en C...\n");
+
+    //  port SPI
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) {
+        perror("Erreur: Impossible d'ouvrir le SPI");
+        return 1;
+    }
+
+    // config SPI
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+    // config GStreamer (exactement la même que Python)
+    const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc ! "
+                          "'video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=40/1' ! "
+                          "nvv4l2h265enc bitrate=1200000 control-rate=1 insert-sps-pps=true idrinterval=15 maxperf-enable=1 preset-level=1 ! "
+                          "h265parse ! video/x-h265,stream-format=byte-stream ! fdsink fd=1 sync=false";
+
+    printf(">>> Démarrage de GStreamer...\n");
+
+    // popen lance la commande et nous permet de lire la sortie standard (stdout)
+    FILE *pipe = popen(gst_cmd, "r");
+    if (!pipe) {
+        perror("Erreur: Impossible de lancer GStreamer");
+        close(spi_fd);
+        return 1;
+    }
+    setvbuf(pipe, NULL, _IONBF, 0);
+    // transfert SPI
+    uint8_t buffer[CHUNK_SIZE];
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (unsigned long)buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+    };
+
+    printf(">>> Flux vidéo actif --> Envoi en cours...\n");
+
+    while (1) {
+        // 1400 octets GStreamer -> buffer SPI
+        size_t bytes_read = fread(buffer, 1, CHUNK_SIZE, pipe);
+
+        if (bytes_read == 0) {
+            printf("Fin du flux vidéo.\n");
+            break;
+        }
+
+        if (bytes_read < CHUNK_SIZE) {
+            memset(buffer + bytes_read, 0, CHUNK_SIZE - bytes_read);
+        }
+
+        // transfert SPI
+        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) {
+            perror("Erreur: Échec du transfert SPI");
+            break;
+        }
+
+        usleep(1000);
+    }
+
+    pclose(pipe);
+    close(spi_fd);
+    printf("Fermeture terminée.\n");
+
+    return 0;
+}
+```
+
+### Dimanche 29.03
+Test de range avec ce setup 
+jetson (720p 24fps consigne de 400kbps)
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev0.0"
+#define GPIO_VALUE_PATH "/sys/class/gpio/gpio78/value"
+#define GPIO_EXPORT_PATH "/sys/class/gpio/export"
+#define GPIO_DIR_PATH "/sys/class/gpio/gpio78/direction"
+
+// Fonction pour initialiser le GPIO 78 proprement
+void setup_gpio() {
+    int fd;
+
+    // Exporter le GPIO 78 (si pas déjà fait)
+    fd = open(GPIO_EXPORT_PATH, O_WRONLY);
+    if (fd >= 0) {
+        write(fd, "78", 2);
+        close(fd);
+    }
+
+    usleep(100000); // Laisse 100ms à Linux pour créer les fichiers
+
+    // Définir la direction en "in" (Entrée)
+    fd = open(GPIO_DIR_PATH, O_WRONLY);
+    if (fd >= 0) {
+        write(fd, "in", 2);
+        close(fd);
+    }
+}
+
+int main() {
+    int spi_fd, gpio_fd;
+    uint32_t mode = 0;
+    uint32_t speed = 5000000; // 5 MHz
+    uint8_t bits = 8;
+
+    printf(">>> Initialisation du GPIO 78...\n");
+    setup_gpio();
+
+    // On ouvre le fichier GPIO une seule fois pour une lecture ultra-rapide
+    gpio_fd = open(GPIO_VALUE_PATH, O_RDONLY);
+    if (gpio_fd < 0) {
+        perror("Erreur: Impossible d'ouvrir le GPIO 78");
+        return 1;
+    }
+
+    printf(">>> Initialisation du SPI en C...\n");
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) {
+        perror("Erreur: Impossible d'ouvrir le SPI");
+        return 1;
+    }
+
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+    //const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc "
+    //                  "aelock=true awblock=true ! "
+    //                  "'video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1' ! "
+      //                "nvv4l2h265enc bitrate=1000000 control-rate=1 insert-sps-pps=true "
+        //              "idrinterval=30 maxperf-enable=1 preset-level=1 ! "
+          //            "video/x-h265,stream-format=byte-stream ! fdsink fd=1 sync=false";
+    const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc "
+                          "aelock=true awblock=true ! "
+                          "'video/x-raw(memory:NVMM),width=720,height=480,format=NV12,framerate=24/1' ! "
+                          "nvv4l2h265enc bitrate=400000 control-rate=1 insert-sps-pps=true idrinterval=1000 maxperf-enable=1 preset-level=1 ! "
+                          "video/x-h265,stream-format=byte-stream ! fdsink fd=1 sync=false";
+    //const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc ! "
+    //                      "'video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1' ! "
+    //                      "nvv4l2h265enc bitrate=1000000 control-rate=1 insert-sps-pps=true idrinterval=120 maxperf-enable=1 preset-level=1 ! "
+    //                      "h265parse ! video/x-h265,stream-format=byte-stream ! fdsink fd=1 sync=false";
+    //const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc ! "
+    //                      "'video/x-raw(memory:NVMM),width=640,height=360,format=NV12,framerate=30/1' ! "
+    //                      "nvv4l2h265enc bitrate=200000 control-rate=1 insert-sps-pps=true idrinterval=30 maxperf-enable=1 preset-level=1 ! "
+    //                      "video/x-h265,stream-format=byte-stream ! fdsink fd=1 sync=false";
+    printf(">>> Démarrage de GStreamer...\n");
+    FILE *pipe = popen(gst_cmd, "r");
+    if (!pipe) return 1;
+
+    // TUE LE CACHE LOGICIEL : Flux tendu absolu
+    setvbuf(pipe, NULL, _IONBF, 0);
+
+    uint8_t buffer[CHUNK_SIZE];
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (unsigned long)buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+    };
+
+    printf(">>> Flux vidéo actif ! Attente du signal STM32...\n");
+
+    char gpio_val;
+
+    while (1) {
+        size_t bytes_read = fread(buffer, 1, CHUNK_SIZE, pipe);
+        if (bytes_read == 0) break;
+        if (bytes_read < CHUNK_SIZE) {
+            memset(buffer + bytes_read, 0, CHUNK_SIZE - bytes_read);
+        }
+        int stuck_counter = 0;
+        do {
+            lseek(gpio_fd, 0, SEEK_SET);
+            if (read(gpio_fd, &gpio_val, 1) != 1) {
+                // Sécurité si Linux refuse de lire
+                gpio_val = '0';
+            }
+
+            if (gpio_val == '0') {
+                stuck_counter++;
+                // Affiche un message d'alerte sans spammer le terminal
+                if (stuck_counter % 500000 == 0) {
+                    printf("ATTENTION: La Jetson est bloquée, le STM32 dit STOP (LOW)\n");
+                }
+            }
+        } while (gpio_val == '0');
+
+        // Feu vert ! On envoie sur le SPI instantanément
+        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) {
+            perror("Erreur SPI");
+            break;
+        }
+    }
+
+    pclose(pipe);
+    close(spi_fd);
+    close(gpio_fd);
+    return 0;
+}
+```
+Sur le STM
+```c
+
+#include <string.h>
+#include <endian.h>
+#include "mmosal.h"
+#include "mmwlan.h"
+#include "mmconfig.h"
+
+#include "mmipal.h"
+#include "lwip/icmp.h"
+#include "lwip/tcpip.h"
+#include "lwip/udp.h"
+#include "lwip/netif.h"
+
+
+#include "mm_app_common.h"
+#include "stm32u5xx_hal.h"
+
+// --- SPI ---
+#define SPI_PAYLOAD_SIZE 1400
+
+SPI_HandleTypeDef hspi1;
+uint8_t spi_rx_buffer[SPI_PAYLOAD_SIZE];
+volatile bool spi_packet_received = false;
+// ---------------------
+/* Application default configurations. */
+
+/** Number of broadcast packet to transmit */
+#define DEFAULT_BROADCAST_PACKET_COUNT 100
+/** UDP port to bind too. */
+#define DEFAULT_UDP_PORT 1337
+/** Interval between successive packet transmission. */
+#define DEFAULT_PACKET_INTERVAL_MS 100
+/** Maximum length of broadcast tx packet payload */
+#define BROADCAST_PACKET_MAX_TX_PAYLOAD_LEN 35
+/** Format string to use for the tx packet payload */
+#define BROADCAST_PACKET_TX_PAYLOAD_FMT "G'day World, packet no. %lu."
+/** Default mode for the application */
+#define DEFAULT_UDP_BROADCAST_MODE TX_MODE
+/** Default ID used in the rx metadata. */
+#define DEFAULT_UDP_BROADCAST_ID 0
+
+/** Key used to identify received broadcast packets. */
+#define MMBC_KEY 0x43424d4d
+
+/** Enumeration of the various broadcast modes that can be used. */
+enum udp_broadcast_mode
+{
+    /** Transmit mode. Application will transmit a set amount of broadcast packets. */
+    TX_MODE,
+    /** Receive mode. Application will listen for any broadcast packets and process any that start
+     * with @ref MMBC_KEY */
+    RX_MODE
+};
+
+/** UDP broadcast rx payload format. */
+PACK_STRUCT_STRUCT struct udp_broadcast_rx_payload
+{
+    /** Key used to identify payload.*/
+    uint32_t key;
+
+    /** Flexible array member used to access color data for each ID. */
+    struct
+    {
+        /** Red intensity. */
+        uint8_t red;
+        /** Green intensity. */
+        uint8_t green;
+        /** Blue intensity. */
+        uint8_t blue;
+    } data[];
+};
+
+/** Struct used in rx mode for storing state. */
+struct udp_broadcast_rx_metadata
+{
+    /** The last time in milliseconds that a valid payload was received. */
+    uint32_t last_rx_time_ms;
+    /** ID of the device, used to retrieve data from the payload. */
+    uint32_t id;
+};
+
+/** Global data structure used in RX mode to record metadata. */
+static struct udp_broadcast_rx_metadata rx_metadata = { 0 };
+
+
+static volatile bool is_network_ready = false;
+
+/* Callback pour savoir quand la connexion est prete*/
+static void link_status_callback(const struct mmipal_link_status *link_status)
+{
+    if (link_status->link_state == MMIPAL_LINK_UP) {
+        printf("\n>>> CONNECTE A OPENWRT <<<\n");
+        is_network_ready = true;
+    }
+}
+
+/**
+ * Callback function to handle received data from the UDP pcb.
+ *
+ * @warning Be aware that @c addr might point into the pbuf @c p so freeing this pbuf can make
+ *          @c addr invalid, too.
+ *
+ * @param arg   User supplied argument used to store a reference to the global rx_metadata struct.
+ * @param pcb   The udp_pcb which received data
+ * @param p     The packet buffer that was received
+ * @param addr  The remote IP address from which the packet was received
+ * @param port  The remote port from which the packet was received
+ */
+static void udp_raw_recv(void *arg,
+                         struct udp_pcb *pcb,
+                         struct pbuf *p,
+                         const ip_addr_t *addr,
+                         u16_t port)
+{
+    LWIP_UNUSED_ARG(pcb);
+    LWIP_UNUSED_ARG(addr);
+    LWIP_UNUSED_ARG(port);
+
+    if (p == NULL)
+    {
+        return;
+    }
+
+    struct udp_broadcast_rx_metadata *metadata = (struct udp_broadcast_rx_metadata *)arg;
+    struct udp_broadcast_rx_payload *payload = (struct udp_broadcast_rx_payload *)p->payload;
+    uint32_t current_time_ms = mmosal_get_time_ms();
+
+    /* This is the minimum length we need to prevent reading off the end of the payload. */
+    uint32_t min_payload_len =
+        sizeof(payload->key) + (sizeof(payload->data[0]) * (metadata->id + 1));
+
+    if (p->len < min_payload_len)
+    {
+        printf("Payload length to short. Len: %u. Min len: %lu\n", p->len, min_payload_len);
+        goto exit;
+    }
+
+    if (le32toh(payload->key) != MMBC_KEY)
+    {
+        printf("Invalid payload received.\n");
+        goto exit;
+    }
+
+    printf("Valid payload received. \n"
+           "    Time since last: %lums\n"
+           "    Data recieved: 0x%02x%02x%02x\n\n",
+           (current_time_ms - metadata->last_rx_time_ms),
+           payload->data[metadata->id].red,
+           payload->data[metadata->id].green,
+           payload->data[metadata->id].blue);
+
+    metadata->last_rx_time_ms = current_time_ms;
+
+    mmhal_set_led(LED_RED, payload->data[metadata->id].red);
+    mmhal_set_led(LED_GREEN, payload->data[metadata->id].green);
+    mmhal_set_led(LED_BLUE, payload->data[metadata->id].blue);
+
+exit:
+    pbuf_free(p);
+}
+
+/**
+ * Set a receive callback for the UDP PCB. This callback will be called when receiving a datagram
+ * for the pcb.
+ *
+ * @param pcb UDP protocol control block to register the callback for
+ */
+static void udp_broadcast_rx_start(struct udp_pcb *pcb)
+{
+    mmconfig_read_uint32("udp_broadcast.id", &(rx_metadata.id));
+
+    LOCK_TCPIP_CORE();
+    udp_recv(pcb, udp_raw_recv, &rx_metadata);
+    UNLOCK_TCPIP_CORE();
+}
+
+/**
+ * Broadcast a udp packet every @ref DEFAULT_PACKET_INTERVAL_MS until @ref
+ * DEFAULT_BROADCAST_PACKET_COUNT packets have been sent.
+ *
+ * @note If the parameters are set in the config store they will be used.
+ *
+ * @param pcb UDP protocol control block to use for transmission
+ */
+static void udp_broadcast_tx_start(struct udp_pcb *pcb)
+{
+    //err_t err;
+
+    ip_set_option(pcb, SOF_BROADCAST);
+    ip_addr_t dest_ip;
+    IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 255);
+
+    printf(">>> PONT SPI-WIFI ACTIVE ! En attente de la Jetson... <<<\n");
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+
+        while (1)
+        {
+            if (spi_packet_received) {
+
+            	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, SPI_PAYLOAD_SIZE, PBUF_REF);
+            	if (p != NULL) {
+            	    p->payload = (void *)spi_rx_buffer;
+
+            	    LOCK_TCPIP_CORE();
+            	    udp_sendto(pcb, p, &dest_ip, 1337);
+            	    UNLOCK_TCPIP_CORE();
+
+            	    pbuf_free(p);
+            	}
+
+                spi_packet_received = false;
+
+                // STM32 écoute
+                HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+
+                // Ensuite GO pour la Jetson
+                HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+
+            } else {
+                mmosal_task_sleep(1);
+            }
+        }
+}
+
+/**
+ * Initialize the UDP protocol control block. Binds to @ref DEFAULT_UDP_PORT
+ *
+ * @note If the parameters are set in the config store they will be used.
+ *
+ * @return Reference to the pcb is successfully initialized else NULL
+ */
+static struct udp_pcb *init_udp_pcb(void)
+{
+    struct udp_pcb *pcb = NULL;
+    LOCK_TCPIP_CORE();
+    pcb = udp_new();
+    if (pcb != NULL) {
+        udp_bind(pcb, IP_ANY_TYPE, 1337);
+    }
+    UNLOCK_TCPIP_CORE();
+    return pcb;
+}
+/**
+ * Get the mode from config store.
+ *
+ * @return translates the value of @c udp_broadcast.mode into a @ref udp_broadcast_mode, if no valid
+ *         mode is set @ref DEFAULT_UDP_BROADCAST_MODE is returned.
+ */
+static enum udp_broadcast_mode get_mode(void)
+{
+    enum udp_broadcast_mode mode = DEFAULT_UDP_BROADCAST_MODE;
+    char mode_str[32];
+    if (mmconfig_read_string("udp_broadcast.mode", mode_str, sizeof(mode_str)) > 0)
+    {
+        if (strcasecmp(mode_str, "tx") == 0)
+        {
+            mode = TX_MODE;
+        }
+        else if (strcasecmp(mode_str, "rx") == 0)
+        {
+            mode = RX_MODE;
+        }
+        else
+        {
+            printf("Unknown mode: %s. Reverting to default.\n", mode_str);
+        }
+    }
+
+    return mode;
+}
+
+void SPI_Slave_Init(void)
+{
+    // 1. Activer les horloges du SPI1, du Port E(SPI) et port D (Spare GPIO)(go no go jetson)
+    __HAL_RCC_SPI1_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    // D10(PE12), D13(PE13), D12(PE14) et D11(PE15)
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+
+    GPIO_InitStruct.Alternate = GPIO_AF5_SPI1; // Sur U5, Port E = SPI1 (AF5) !
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+    // Config SPI1
+    hspi1.Instance = SPI1;
+    hspi1.Init.Mode = SPI_MODE_SLAVE;
+    hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+    hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+    hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+    hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+
+    // CS sur D10
+    hspi1.Init.NSS = SPI_NSS_HARD_INPUT;
+
+    hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+    hspi1.Init.TIMode = SPI_TIMODE_DISABLED;
+    hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLED;
+    hspi1.Init.CRCPolynomial = 7;
+
+    if (HAL_SPI_Init(&hspi1) != HAL_OK) {
+    	printf("ERREUR : Echec initialisation SPI1 !\n");
+	} else {
+        printf("SPI Esclave (SPI1) initialise sur PE12 a PE15 !\n");
+    }
+
+        // --- LES 2 LIGNES MANQUANTES POUR LE MODE '_IT' --- mode IT ?
+	HAL_NVIC_SetPriority(SPI1_IRQn, 5, 0);
+	HAL_NVIC_EnableIRQ(SPI1_IRQn);
+
+	// Initialisation de la broche Handshake (PD15) (Go no go jetson)
+	GPIO_InitTypeDef GPIO_InitStruct_Handshake = {0};
+	GPIO_InitStruct_Handshake.Pin = GPIO_PIN_15;
+	GPIO_InitStruct_Handshake.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct_Handshake.Pull = GPIO_NOPULL;
+	GPIO_InitStruct_Handshake.Speed = GPIO_SPEED_FREQ_HIGH;
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct_Handshake);
+}
+// Quand le STM32 a reçu un paquet
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi->Instance == SPI1) {
+    	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
+        spi_packet_received = true;
+        HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+    }
+}
+
+void SPI1_IRQHandler(void)
+{
+    HAL_SPI_IRQHandler(&hspi1);
+}
+
+
+/**
+ * Main entry point to the application. This will be invoked in a thread once operating system
+ * and hardware initialization has completed. It may return, but it does not have to.
+ */
+void app_init(void)
+{
+    printf("\n\n--- PIPELINE JETSON -> STM32 -> WIFI ---\n\n");
+
+    SPI_Slave_Init();
+
+    HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+
+    app_wlan_init();
+    mmipal_set_link_status_callback(link_status_callback);
+
+    printf("Connexion a l'AP OpenWrt en cours...\n");
+    app_wlan_start();
+
+    mmwlan_ate_override_rate_control(MMWLAN_MCS_2, MMWLAN_BW_2MHZ, MMWLAN_GI_NONE);
+    printf("forcage OK : 2 MHz / MCS 2 force.\n");
+    mmwlan_set_power_save_mode(MMWLAN_PS_DISABLED); // pour que quand il n'est pas sous load les ping passe bien
+
+    while (!is_network_ready) {
+        mmosal_task_sleep(10);
+    }
+
+    struct udp_pcb *pcb = init_udp_pcb();
+    if (pcb != NULL) {
+        udp_broadcast_tx_start(pcb);
+    }
+
+    (void)get_mode;
+    (void)udp_broadcast_rx_start;
+}
+
+```
+commande de capture sur le PC `./gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! h265parse config-interval=-1 ! avdec_h265 max-threads=1 ! d3d11videosink sync=false async=false max-lateness=0`
+
+- Latence glass to glass éstimée en filmant un timer sur l'écran: 200ms (donc de très prés)
+- Distance:
+	- chambre - cave (30m) mur extrément épais (bunker) ca passe mais l'antenne doit être orienter vers la sortie.
+	- chambre - champ (160m): presque mesure a vue 1 mur de ferme 40 cm + arbre et reflet sur les maisons alentour 
+généralement image fluide jusqu'a atteindre la limite qui coup très brutallement
 
 ## Avril
 
@@ -726,3 +1514,8 @@ en suite le .pcap peut être ouvert avec wireshark
 
 ### Jeudi 23.07 avant 11h00
 **Rendu final du rapport**
+
+
+
+
+
