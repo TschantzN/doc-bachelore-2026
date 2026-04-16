@@ -1502,6 +1502,101 @@ commande de capture sur le PC `./gst-launch-1.0 udpsrc port=1337 buffer-size=0 !
 	- chambre - champ (160m): presque mesure a vue 1 mur de ferme 40 cm + arbre et reflet sur les maisons alentour 
 généralement image fluide jusqu'a atteindre la limite qui coup très brutallement
 
+### Mardi 31.03
+la latence semble tomber au alentour de 150 - 170 ms avec
+jetson :
+```c
+const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc aelock=true awblock=true ! "
+                      "'video/x-raw(memory:NVMM),width=720,height=480,format=NV12,framerate=30/1' ! "
+                      "nvv4l2h264enc bitrate=400000 control-rate=1 insert-sps-pps=true idrinterval=15 maxperf-enable=1 preset-level=1 num-B-Frames=0 ! "
+                      "h264parse ! video/x-h264,stream-format=byte-stream ! fdsink fd=1 sync=false blocksize=1400";
+```
+PC :
+```bash
+./gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! h264parse disable-passthrough=true ! d3d11h264dec ! queue max-size-buffers=1 leaky=downstream ! d3d11videosink sync=false async=false max-lateness=0
+```
+on passe a ffmpeg
+```bash
+winget install Gyan.FFmpeg
+c'est plus lent que gstreamer
+
+jetsontb@ubuntu:/usr/src/jetson_multimedia_api/samples/10_camera_recording$ sudo make
+
+C:\Program Files\gstreamer\1.0\msvc_x86_64\bin
+
+la camera ne connais pas la 480p donc elle panique et essie de la 720p 120fps
+jetsontb@ubuntu:~/TEST$ gst-launch-1.0 nvarguscamerasrc aelock=true awblock=true ! \
+> 'video/x-raw(memory:NVMM),width=720,height=480,format=NV12,framerate=30/1' ! \
+> identity name=AVANT_ENCODEUR silent=false ! \
+> nvv4l2h264enc bitrate=400000 control-rate=1 insert-sps-pps=true idrinterval=15 maxperf-enable=1 preset-level=1 num-B-Frames=0 ! \
+> identity name=APRES_ENCODEUR silent=false ! \
+> h264parse ! fakesink
+Setting pipeline to PAUSED ...
+Opening in BLOCKING MODE
+Pipeline is live and does not need PREROLL ...
+Setting pipeline to PLAYING ...
+New clock: GstSystemClock
+Redistribute latency...
+NvMMLiteOpen : Block : BlockType = 4
+===== NVMEDIA: NVENC =====
+NvMMLiteBlockCreate : Block : BlockType = 4
+GST_ARGUS: Creating output stream
+CONSUMER: Waiting until producer is connected...
+GST_ARGUS: Available Sensor modes :
+GST_ARGUS: 3264 x 2464 FR = 21.000000 fps Duration = 47619048 ; Analog Gain range min 1.000000, max 10.625000; Exposure Range min 13000, max 683709000;
+
+GST_ARGUS: 3264 x 1848 FR = 28.000001 fps Duration = 35714284 ; Analog Gain range min 1.000000, max 10.625000; Exposure Range min 13000, max 683709000;
+
+GST_ARGUS: 1920 x 1080 FR = 29.999999 fps Duration = 33333334 ; Analog Gain range min 1.000000, max 10.625000; Exposure Range min 13000, max 683709000;
+
+GST_ARGUS: 1640 x 1232 FR = 29.999999 fps Duration = 33333334 ; Analog Gain range min 1.000000, max 10.625000; Exposure Range min 13000, max 683709000;
+
+GST_ARGUS: 1280 x 720 FR = 59.999999 fps Duration = 16666667 ; Analog Gain range min 1.000000, max 10.625000; Exposure Range min 13000, max 683709000;
+
+GST_ARGUS: 1280 x 720 FR = 120.000005 fps Duration = 8333333 ; Analog Gain range min 1.000000, max 10.625000; Exposure Range min 13000, max 683709000;
+
+GST_ARGUS: Running with following settings:
+   Camera index = 0
+   Camera mode  = 5
+   Output Stream W = 1280 H = 720
+   seconds to Run    = 0
+   Frame Rate = 120.000005
+GST_ARGUS: Setup Complete, Starting captures for 0 seconds
+GST_ARGUS: Starting repeat capture requests.
+CONSUMER: Producer has connected; continuing.
+H264: Profile = 66, Level = 0
+^Chandling interrupt.
+Interrupt: Stopping pipeline ...
+Execution ended after 0:00:05.172663697
+Setting pipeline to PAUSED ...
+Setting pipeline to READY ...
+GST_ARGUS: Cleaning up
+CONSUMER: Done Success
+GST_ARGUS: Done Success
+Setting pipeline to NULL ...
+Freeing pipeline ...
+```
+
+**Méthodologie :**
+Pour déterminer si la latence provenait du système embarqué (Caméra $\rightarrow$ Jetson $\rightarrow$ SPI $\rightarrow$ STM32 $\rightarrow$ HaLow) ou de la station au sol (PC Windows), j'ai isolé la station de réception.
+
+**Tests réalisés (Uniquement sur le PC Windows) :**
+1. **Test 1 - La balle rebondissante (`videotestsrc`) :** Génération locale d'une animation à 30 fps, encodée, envoyée sur UDP (127.0.0.1) et décodée par GStreamer. 
+   * *Résultat :* Sensation visuelle de "lourdeur", mais difficile à quantifier sans point de repère.
+2. **Test 2 - Le test du miroir (Webcam + Timer) :** Capture de la webcam locale du PC (`mfvideosrc`), encodée et décodée via la même pipeline UDP locale. Un chronomètre a été filmé devant l'écran pour mesurer le décalage ("Glass-to-Glass delay").
+   * *Résultat :* Mesure d'une latence d'environ **200 ms** en boucle purement locale.
+
+**Conclusions:**
+* **Innocence de l'architecture embarquée :** Le test du chronomètre prouve mathématiquement que le système Jetson + SPI + STM32 + Wi-Fi HaLow n'est pas le goulot d'étranglement. L'encodeur matériel Nvidia (`nvv4l2h264enc`) fait son travail en quelques dizaines de millisecondes.
+* **Le PC Windows est le coupable :** La majorité de la latence (probablement 100+ ms) est introduite par le décodage et l'affichage de réception sous Windows. 
+* **Causes identifiées sur la station au sol :**
+  1. **L'attente du Byte-Stream :** En l'absence de protocole RTP, le parseur (`h264parse`) attend le premier octet de l'image suivante pour valider l'image en cours, ajoutant un délai (~33 ms à 30 fps).
+  2. **Les tampons de décodage :** Les décodeurs logiciels/matériels sur PC conservent toujours quelques images en cache pour garantir la fluidité.
+  3. **Le DWM de Windows (Desktop Window Manager) :** L'OS impose une composition d'affichage avec un "Triple Buffering" (V-Sync non désactivable pour le mode fenêtré), ajoutant mécaniquement 2 à 3 images de retard avant l'affichage de la frame.
+  
+donc en tout probablement environ 3 a 4 frame bloquées dans des buffer donc environ 120ms
+
+
 ## Avril
 
 ## Mai
