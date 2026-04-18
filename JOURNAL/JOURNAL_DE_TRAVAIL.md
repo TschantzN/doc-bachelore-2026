@@ -199,7 +199,7 @@ gantt
     Forçage PHY (MCS 2, 2MHz) :done, tx3, 2026-03-20, 2026-03-24
     Validation débit UDP (1.34 Mbps) :done,milestone ,2026-03-22, 0d
     Interface Encodeur Vidéo (proto RPI puis Jetson) :active, tx4, 2026-03-25, 2026-05-10
-    Tests de charge , jitter et range :tx5, 2026-05-10, 2026-06-14
+    Opti gstreamer  , jitter et range :tx5, 2026-05-10, 2026-06-14
 
     section RX (OpenWrt & PC)
     Désactivation Chiffrement & Monitor Mode :done, rx1, 2026-03-01, 2026-03-06
@@ -273,20 +273,20 @@ gantt
     Validation débit UDP (1.34 Mbps) :done,milestone ,2026-03-22, 0d
     Interface Encodeur Vidéo (Jetson) :done, tx4, 2026-03-25, 2026-03-29
     Contrôle de flux matériel (Handshake GPIO) :done, tx4b, 2026-03-28, 2026-03-29
-    Tests de charge , jitter et range :active, tx5, 2026-03-29, 2026-06-14
+    Opti gstreamer, jitter et range, sur jetson :active, tx5, 2026-03-29, 2026-06-14
 
     section RX (OpenWrt & PC)
     Désactivation Chiffrement & Monitor Mode :done, rx1, 2026-03-01, 2026-03-06
     Désactivation Chiffrement mais mode AP ouvert:done, rx2, 2026-03-20, 2026-03-24
     Tunnel Réseau (tcpdump, Netcat, TCP) :done, rx3, 2026-03-20, 2026-03-24
-    Scripting d'analyse (Python/Wireshark) :active, rx4, 2026-03-24, 2026-04-20
+    Scripting d'analyse (Python/Wireshark) :done, rx4, 2026-03-24, 2026-03-30
     Pontage Réseau (Bridge) :done, rx4b, 2026-03-26, 2026-03-28
     Implémentation Pipeline Vidéo (PC) :done, rx5, 2026-03-27, 2026-03-29
     Validation MVP (Latence ~200ms) :done,milestone, 2026-03-29, 0d
     Optimisation Latence & GStreamer :active, rx6, 2026-03-30, 2026-05-15
 
     section Post-Semestre (40h/sem)
-    Intégration Drone & Optimisations finales :crit, int1, 2026-06-15, 2026-07-08
+    Optimisations finales :crit, int1, 2026-06-15, 2026-07-08
     Tests Terrain (Portée & NLOS)    :int2, 2026-07-08, 2026-07-23
     Préparation Défense              :int3, 2026-07-16, 2026-07-23
 
@@ -306,6 +306,70 @@ gantt
 
 
 ## Avril
+### Vendredi 17.04
+- Implémentation du récepteur sur la rpi4 
+- test ffplay, gstreamer, motion jpeg 
+### Samedi 18.04
+
+- divers test de commande entre jetson et rpi 
+```mermaid
+gantt
+    title Planning 450h
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d/%m
+
+    excludes 2026-03-09,2026-03-10,2026-03-11,2026-03-12,2026-03-13,2026-04-06,2026-04-07,2026-04-08,2026-04-09,2026-04-10
+    
+    section Indisponible
+    Crunch      :2026-03-09, 2026-03-14
+    Vacances    :2026-04-06, 2026-04-11
+
+    section Initialisation & Faisabilité
+    Faisabilité Driver :done, p1, 2026-02-16, 2026-02-28
+    Setup SDK MM       :done, p2, 2026-03-01, 2026-03-06
+    Recherche param SDK & Test flash EKH05 :done, p3, 2026-03-06, 2026-03-20
+    Test flash ekh05         :done,milestone ,2026-03-18, 0d
+
+    section TX (FreeRTOS)
+    Architecture UDP Broadcast :done, tx1, 2026-03-20, 2026-03-24
+    Packet de test & Burst LwIP :done, tx2, 2026-03-20, 2026-03-24
+    Forçage PHY (MCS 2, 2MHz) :done, tx3, 2026-03-20, 2026-03-24
+    Validation débit UDP (1.34 Mbps) :done,milestone ,2026-03-22, 0d
+    Interface Encodeur Vidéo (Jetson) :done, tx4, 2026-03-25, 2026-03-29
+    Contrôle de flux matériel (Handshake GPIO) :done, tx4b, 2026-03-28, 2026-03-29
+    Opti gstreamer , jitter et range :active, tx5, 2026-03-29, 2026-06-14
+
+    section RX (OpenWrt & PC & RPI4)
+    Désactivation Chiffrement & Monitor Mode :done, rx1, 2026-03-01, 2026-03-06
+    Désactivation Chiffrement mais mode AP ouvert:done, rx2, 2026-03-20, 2026-03-24
+    Tunnel Réseau (tcpdump, Netcat, TCP) :done, rx3, 2026-03-20, 2026-03-24
+    Scripting d'analyse (Python/Wireshark) :done, rx4, 2026-03-24, 2026-03-30
+    Pontage Réseau (Bridge) :done, rx4b, 2026-03-26, 2026-03-28
+    Implémentation Pipeline Vidéo (PC) :done, rx5, 2026-03-27, 2026-03-29
+    Validation MVP (Latence ~200ms) :done,milestone, 2026-03-29, 0d
+    Test sur PC fixe (Latence ~120ms) :done,milestone, 2026-04-18, 0d
+    Test sur RPI4 (latence 500ms+):active, rx7, 2026-04-17, 2026-04-23
+    Optimisation Latence & GStreamer(RPI4 & PC):active, rx6, 2026-03-30, 2026-06-14
+
+
+    section Post-Semestre (40h/sem)
+    Optimisations finales :crit, int1, 2026-06-15, 2026-07-08
+    Tests Terrain (Portée & NLOS)    :int2, 2026-07-08, 2026-07-23
+    Préparation Défense              :int3, 2026-07-16, 2026-07-23
+
+    section Documentation
+    Rédaction du CDC         :done, doc1, 2026-02-16, 2026-03-09
+    CDC validé               :done, milestone ,2026-03-09, 0d
+    correction détail CDC    :done, doc2, 2026-03-24, 1d
+    CDC revalidé             :done, milestone ,2026-03-27, 0d
+    Journal de travail       :active, doc3, 2026-02-16, 2026-07-23
+    Rapport - Intro & Faisabilité :done,doc4, 2026-02-27, 2026-03-21
+    Rapport - Architecture Système :active,doc4b, 2026-03-29, 2026-05-10
+    Rapport - Réalisation & Mesures :doc5, 2026-05-11, 2026-07-10
+    Rendu intermédiaire        :milestone ,2026-05-20, 0d
+    Finalisation & Mise en page :doc6, 2026-07-11, 2026-07-23
+    Rendu final                :milestone ,2026-07-23, 0d
+```
 
 ## Mai
 

@@ -1598,6 +1598,73 @@ donc en tout probablement environ 3 a 4 frame bloquées dans des buffer donc env
 
 
 ## Avril
+### Vendredi 17.04
+établissement de la réception de la rpi4. ne pas oublier de mettre l'IP manuel 192.168.12.50 puis 
+```bash
+sudo nice -n -20 gst-launch-1.0 udpsrc port=1337 ! h264parse ! v4l2h264dec ! kmssink sync=false
+```
+divers essais, notamment Motion JPEG mais pas asser de débit. beaucoup de commande essayer jusqu a ce que cela fonction...
+ajouter l'essaie de ffplay (3 secondes de latences)
+
+### Samedi 18.04
+
+activer le spi, éditer le code et le recompiler (rappel)
+```bash
+sudo modprobe spidev
+nano camera_to_rpi.c
+gcc -O3 -o camera_to_rpi camera_to_rpi.c
+```
+active le "low latency" mode de la video
+```bash
+v4l2-ctl -d /dev/video0 --set-ctrl low_latency_mode=1
+```
+Si le pipline video plante et qu'on à plus accés a la vidéo on la reset avec ca.
+```bash
+sudo systemctl restart nvargus-daemon
+```
+
+
+
+
+avec RTP (marche pas parce que on hache les packets il faudrait revoir le MCU)
+```bash
+sudo nice -n -20 gst-launch-1.0 udpsrc port=1337 buffer-size=2097152 ! \
+    "application/x-rtp, media=video, clock-rate=90000, encoding-name=H264, payload=96" ! \
+    rtph264depay ! \
+    h264parse ! \
+    v4l2h264dec capture-io-mode=4 ! \
+    v4l2convert output-io-mode=dmabuf-import ! \
+    "video/x-raw, format=NV12" ! \
+    kmssink sync=false skip-vsync=true
+```
+
+```c
+const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc ! "
+                      "\"video/x-raw(memory:NVMM),width=640,height=480,format=NV12,framerate=30/1\" ! "
+                      "nvv4l2h264enc bitrate=800000 control-rate=1 preset-level=1 maxperf-enable=1 "
+                      "profile=0 insert-sps-pps=true "
+                      "slice-header-spacing=1400 bit-packetization=1 "
+                      "SliceIntraRefreshInterval=30 ! "
+                      "h264parse ! rtph264pay config-interval=1 pt=96 ! "
+                      "fdsink fd=1 sync=false blocksize=1400";
+```
+
+
+sans rtp sur la RPI4, la latence est énorme, entre 400 et 700 ms.
+
+```bash
+sudo nice -n -20 gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! h264parse ! v4l2h264dec ! kmssink sync=false
+```
+
+```c
+const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc aelock=true awblock=true ! "
+                      "\"video/x-raw(memory:NVMM),width=640,height=480,format=NV12,framerate=30/1\" ! "
+                      "nvv4l2h264enc bitrate=800000 control-rate=1 preset-level=1 maxperf-enable=1 "
+                      "profile=0 insert-sps-pps=true idrinterval=15 "
+                      "slice-header-spacing=1400 bit-packetization=1 ! "
+                      "h264parse ! "
+                      "fdsink fd=1 sync=false blocksize=1400";
+```
 
 ## Mai
 
