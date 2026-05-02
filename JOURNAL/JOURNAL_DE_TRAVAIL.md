@@ -371,7 +371,16 @@ gantt
     Rendu final                :milestone ,2026-07-23, 0d
 ```
 
+### Vendredi 24.04
+- Prise de mesure pour toutes les étapes du pipline.
+
 ## Mai
+
+### Vendredi 01.05
+- Essayer d'utiliser la caméra sur la RPI4 avec le compute hat. Mais impossible de voire la caméra.
+
+### Samedi 02.05
+- Rédaction de rapport
 
 ### Mecredi 20.05 15h00
 **Rendu intermédiaire**

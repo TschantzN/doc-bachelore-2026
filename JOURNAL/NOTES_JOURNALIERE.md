@@ -719,7 +719,7 @@ tentative de setup de l'USB
 ### Vendredi 27.03 
 L'USB est reconnu mais se fait déco, probablement un problème de stabilité.
 on oubli l'USB et on par sur du SPI.
-Setup de la jetson nano 2G dev kit.
+Setup de la jetson nano 2G dev kit (https://developer.nvidia.com/embedded/learn/get-started-jetson-nano-2gb-devkit#setup).
 faire un réseau partager depuis le telephone puis ssh jetsontb@10.120.243.168 ensuite installer pip3 puis spidev. ensuite setup l'interface SPI avec sudo /opt/nvidia/jetson-io/jetson-io.py et sélection de SPI1 (set pin manually) puis 
 reboot.
 test d'envoie
@@ -1503,7 +1503,7 @@ commande de capture sur le PC `./gst-launch-1.0 udpsrc port=1337 buffer-size=0 !
 généralement image fluide jusqu'a atteindre la limite qui coup très brutallement
 
 ### Mardi 31.03
-la latence semble tomber au alentour de 150 - 170 ms avec
+la latence semble tomber au alentour de 150 - 170 ms avec 
 jetson :
 ```c
 const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc aelock=true awblock=true ! "
@@ -1511,20 +1511,20 @@ const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc aelock=true awblock=tr
                       "nvv4l2h264enc bitrate=400000 control-rate=1 insert-sps-pps=true idrinterval=15 maxperf-enable=1 preset-level=1 num-B-Frames=0 ! "
                       "h264parse ! video/x-h264,stream-format=byte-stream ! fdsink fd=1 sync=false blocksize=1400";
 ```
-PC :
+PC (C:\Program Files\gstreamer\1.0\msvc_x86_64\bin):
 ```bash
 ./gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! h264parse disable-passthrough=true ! d3d11h264dec ! queue max-size-buffers=1 leaky=downstream ! d3d11videosink sync=false async=false max-lateness=0
 ```
 on passe a ffmpeg
 ```bash
 winget install Gyan.FFmpeg
+```
 c'est plus lent que gstreamer
-
+```bash
 jetsontb@ubuntu:/usr/src/jetson_multimedia_api/samples/10_camera_recording$ sudo make
-
-C:\Program Files\gstreamer\1.0\msvc_x86_64\bin
-
+```  
 la camera ne connais pas la 480p donc elle panique et essie de la 720p 120fps
+```bash
 jetsontb@ubuntu:~/TEST$ gst-launch-1.0 nvarguscamerasrc aelock=true awblock=true ! \
 > 'video/x-raw(memory:NVMM),width=720,height=480,format=NV12,framerate=30/1' ! \
 > identity name=AVANT_ENCODEUR silent=false ! \
@@ -1666,7 +1666,159 @@ const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc aelock=true awblock=tr
                       "fdsink fd=1 sync=false blocksize=1400";
 ```
 
+### Vendredi 24.04
+#### Profilage de la chaîne d'émission (Jetson, SPI, MCU -> PC)
+
+**Objectif :** Mesurer le temps exact de traitement et de transmission matérielle d'une trame vidéo complète (Frame), depuis le capteur de la caméra jusqu'à l'envoi dans la couche radio Wi-Fi HaLow.
+
+#### 1. Mesure de la Latence de Capture & Encodage (Jetson)
+* **Méthode :** Utilisation des `Tracers` natifs de GStreamer pour profiler le temps de passage dans l'encodeur matériel H.265 (`nvv4l2h265enc`).
+* **Commande exécutée :**
+    ```bash
+    export GST_DEBUG="GST_TRACER:7"
+    export GST_TRACERS="latency(flags=element)"
+    ./camera_to_pc 2> latency.log
+    grep "sink=(string)fdsink0_sink" latency.log | awk -F'time=\\(guint64\\)' '{print $2}' | awk -F',' '{printf "%.2f ms\n", $1 / 1000000}'
+    ```
+* **Résultat validé :** Le temps de traitement interne de la Jetson est stabilisé à **~1.2 ms** par trame.
+
+#### 2. Temps de traitement par Paquet (SPI & MCU)
+Le flux vidéo est découpé en paquets de 1400 octets avant l'envoi.
+
+* **Latence de Transfert SPI (Théorique pur) :**
+    * Fréquence d'horloge SPI : 5 MHz ($5\,000\,000 \text{ bits/s}$).
+    * Taille du bloc : 1400 octets ($11\,200 \text{ bits}$).
+    * Temps de transfert : $t = \frac{11\,200}{5\,000\,000} = \mathbf{2.24 \text{ ms / paquet}}$.
+
+* **Latence de Traitement MCU (STM32) :**
+    * **Méthode :** Utilisation du registre matériel DWT (Data Watchpoint and Trace) pour compter les cycles d'horloge exacts entre la fin de réception SPI et la fin de l'encapsulation UDP par LwIP.
+    * **Correction apportée :** Suppression d'un double réarmement de l'interruption SPI qui bloquait le HAL.
+    * **Résultat validé :** Moyenne mesurée à **~0.8 ms / paquet** (Min: 0.3 ms, Max: 1.2 ms).
+
+* **Temps de transit total pour 1 paquet :** $2.24 \text{ ms} + 0.8 \text{ ms} = \mathbf{3.04 \text{ ms}}$.
+
+#### 3. Latence Réelle d'Émission par Trame (Sérialisation)
+Une image vidéo H.265 complète est rarement contenue dans un seul paquet de 1400 octets. Le mécanisme de *Handshake* matériel (GPIO 78 / PD15) bloque la Jetson tant que le STM32 n'a pas fini de traiter le paquet précédent. Le temps d'émission est donc sérialisé.
+
+* **Paramètres de flux actuels :** Bitrate de 400 kbps à 24 FPS.
+* **Taille moyenne d'une image :** $400\,000 / (24 \times 8) = \mathbf{2\,083 \text{ octets}}$.
+* **Nombre de paquets par image :** $\lceil 2083 / 1400 \rceil = \mathbf{2 \text{ paquets}}$.
+* **Calcul de la latence d'émission totale :**
+  $$Latence = T_{Jetson} + (\text{Nb}_{Paquets} \times T_{Transit})$$
+  $$Latence = 1.2 \text{ ms} + (2 \times 3.04 \text{ ms}) = \mathbf{7.28 \text{ ms}}$$
+
+**Bilan de l'étape :** Le système met en moyenne **7.28 millisecondes** pour capturer, encoder, transférer et router une image réseau complète jusqu'à l'antenne radio. C'est une performance excellente pour un drone FPV. Le paramètre GStreamer `idrinterval=1000` est crucial ici : en évitant les I-Frames massives (qui nécessiteraient de nombreux paquets), il maintient cette latence sous les 10 ms.
+#### Profilage de la Réception et Découverte de l'ISP
+
+**Objectif :** Identifier la cause de la latence "Glass-to-Glass" de ~215 ms mesurée visuellement, alors que l'émetteur a été profilé à ~7.3 ms.
+
+#### 1. Profilage du Décodage Logiciel (PC Windows)
+* **Hypothèse initiale :** Le décodeur logiciel FFmpeg (`avdec_h265`) prend des dizaines de millisecondes pour traiter le flux.
+* **Méthode :** Utilisation des traceurs GStreamer via PowerShell.
+  ```powershell
+  $env:GST_DEBUG="GST_TRACER:7"
+  $env:GST_TRACERS="latency(flags=element)"
+  .\gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! h265parse config-interval=-1 ! avdec_h265 max-threads=1 ! d3d11videosink sync=false async=false max-lateness=0 2> pc_latency.log
+  ```
+* **Résultat :** L'analyse des logs prouve que le CPU décode le H.265 en **~2.0 ms** en moyenne (Min: 0.8 ms, Max: 5.5 ms). Le décodage n'est donc **pas** le goulot d'étranglement. L'activation du décodage matériel GPU (`d3d11h265dec`) améliore l'efficacité énergétique mais ne justifie pas les 200 ms de délai.
+
+#### 2. Identification de la Latence : L'ISP de la caméra
+La soustraction des temps mesurés ($215 \text{ ms} - 7.3 \text{ ms (TX)} - 3 \text{ ms (Radio)} - 2 \text{ ms (RX)}$) a mis en évidence un déficit de **~200 ms**.
+* **Cause isolée :** L'Image Signal Processor (ISP) matériel de la Jetson Nano.
+* **Explication :** L'ISP (`nvarguscamerasrc`) utilise un système de tampons (buffers) internes pour calculer l'exposition automatique (AE) et la balance des blancs (AWB). Par défaut, il conserve jusqu'à 4 images en file d'attente avant de les transmettre à l'encodeur.
+* **Calcul du délai à 24 FPS :** Une image dure $1000 / 24 = 41.6 \text{ ms}$. Le délai induit par les 4 buffers de l'ISP est donc de $4 \times 41.6 = \mathbf{166.4 \text{ ms}}$.
+
+#### 3. Validation de l'hypothèse (Le Fix du Framerate)
+* **Action :** Forcer le capteur photo à s'échantillonner à **60 FPS** pour vider ces buffers matériels plus de deux fois plus vite.
+* **Nouveau calcul théorique :** $4 \text{ buffers} \times (1000 / 60) = \mathbf{66.6 \text{ ms}}$.
+* **Résultat pratique :** La latence visuelle Glass-to-Glass a chuté instantanément autour de **100 à 130 ms**, confirmant formellement l'impact de la fréquence d'échantillonnage de l'ISP sur la latence FPV.
+
+---
+Voici la version fusionnée, épurée et orientée "données brutes" pour ton journal de bord. Les explications longues sont retirées pour laisser la place aux commandes, aux métriques et aux conclusions techniques immédiates.
+
+#### 3. Optimisation de la ground station (Raspberry Pi 4)
+* **Objectif :** Porter le système sur le récepteur embarqué final, la récéption vidéo fonctionnait mais avec une latence immense (voire notes précédentes).
+* **Contrainte :** Absence du décodeur matériel H.265 (`v4l2slh265dec`) sur l'OS du RPi donc on passe a un flux H.264.
+* **Nouveau Pipeline Émission (Jetson H.264 / 30 FPS / Sans B-Frames) :**
+  ```c
+  const char *gst_cmd = "gst-launch-1.0 -q nvarguscamerasrc aelock=true awblock=true tnr-mode=0 ee-mode=0 ! "
+                        "\"video/x-raw(memory:NVMM),width=640,height=480,format=NV12,framerate=30/1\" ! "
+                        "nvv4l2h264enc bitrate=400000 control-rate=1 preset-level=1 maxperf-enable=1 "
+                        "profile=0 insert-sps-pps=true idrinterval=1000 num-B-Frames=0 "
+                        "slice-header-spacing=1400 bit-packetization=1 ! "
+                        "h264parse ! fdsink fd=1 sync=false blocksize=1400";
+  ```
+* **Commande de test matériel RPi (Échec) :**
+  ```bash
+  sudo GST_DEBUG="GST_TRACER:7" GST_TRACERS="latency(flags=element)" nice -n -20 gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! "video/x-h264, stream-format=byte-stream" ! h264parse ! v4l2h264dec ! kmssink sync=false 2> rpi_latency.log
+  ```
+  * *Diagnostic :* Le décodeur matériel (`v4l2h264dec`) impose un Buffer interne de ~10 images (éstimation), verrouillant la latence à **~300 ms**.
+* **Commande finale validée (Décodage Logiciel RPi) :**
+  ```bash
+  sudo GST_DEBUG="GST_TRACER:7" GST_TRACERS="latency(flags=element)" nice -n -20 gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! h264parse config-interval=-1 ! avdec_h264 ! videoconvert ! kmssink sync=false 2> rpi_latency.log
+  ```
+  * *Extraction des temps :* `grep "avdec_h264" rpi_latency.log | awk -F'time=\\(guint64\\)' '{print $2}' | awk -F',' '{printf "%.2f ms\n", $1 / 1000000}' | head -n 5`
+  * *Résultat :* Le processeur ARM contourne le buffer matériel et décode la trame en **~3 ms**.
+
+#### Conclusion et Compromis Système (Trade-off)
+Pour éviter de remplir le buffer du rpi, le capteur est passé 30 FPS. Cela réintroduit le délai ISP à la source ($4 \times 33.3$ ms = ~133 ms). 
+La latence "Glass-to-Glass" théorique absolue du système final s'établit donc autour de **160 à 180 ms**. Ce compromis garantit une stabilité parfaite de la trame sans accumulation de latence dans le temps. mesurer via timer filmer = entre 180 et 200 donc on est pas mal, comme le PC pratiquement.
+
+commande final pour la rpi
+```bash
+nice -n -20 gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! h264parse config-interval=-1 ! avdec_h264 ! videoconvert ! kmssink sync=false
+```
+#### 4. détail de la mesure sur le MCU
+* **Objectif :** Mesurer le temps d'exécution exact mis par le STM32 pour transférer un payload de 1400 octets depuis le buffer SPI vers la stack réseau LwIP (encapsulation UDP/IP) puis vers le modem Wi-Fi HaLow.
+* **Méthode (Registre matériel DWT) :** Pour profiler des temps inférieurs à la milliseconde, les fonctions classiques (`HAL_GetTick()`) sont inutilisables. Le code exploite le composant ARM CoreSight DWT (*Data Watchpoint and Trace*). Le registre `DWT->CYCCNT` s'incrémente à chaque coup d'horloge du processeur. À 160 MHz (`SystemCoreClock`), un cycle correspond à une résolution absolue de **6.25 nanosecondes**.
+
+* **Implémentation et Trace d'exécution :**
+
+  **1. Initialisation du compteur matériel :** Avant d'entrer dans la boucle d'émission, on active le registre de traçage du cœur ARM.
+  ```c
+  // --- ACTIVATION DU COMPTEUR DE CYCLES DWT ---
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+  ```
+
+  **2. Trigger de départ (Interruption SPI) :** Le chronomètre est démarré (`dwt_start`) dans le gestionnaire d'interruption matériel dès que le paquet SPI de 1400 octets est complet, juste avant de bloquer la Jetson avec le Handshake (GPIO 15).
+  ```c
+  void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
+      if (hspi->Instance == SPI1) {
+          // Démarrer le chrono instantanément
+          dwt_start = DWT->CYCCNT;
+          
+          HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
+          spi_packet_received = true;
+      }
+  }
+  ```
+
+  **3. Trigger de fin et Calcul (Boucle principale) :** Après la création du buffer réseau (`pbuf_alloc`) et l'appel à la fonction d'envoi UDP (`udp_sendto`), on relève le compteur. Le calcul du temps en microsecondes est affiché périodiquement pour ne pas saturer l'UART.
+  ```c
+  // --- ARRÊT DU CHRONO ET CALCUL ---
+  dwt_end = DWT->CYCCNT;
+  mcu_cycles = dwt_end - dwt_start;
+
+  // Affichage 1 fois tous les 100 paquets pour préserver le temps CPU
+  if ((packet_counter++ % 100) == 0) {
+      uint32_t freq_mhz = SystemCoreClock / 1000000; // ex: 160 MHz
+      uint32_t time_us = mcu_cycles / freq_mhz;
+
+      printf("[Profilage] Temps de traitement MCU : %lu us (%lu cycles)\n", time_us, mcu_cycles);
+  }
+  ```
+
+* **Conclusion de la mesure :** L'extraction de cette métrique a permis de valider un temps de traitement MCU ultra-court de **~0.8 ms par paquet** (soit environ 128 000 cycles d'horloge). Le STM32 agit donc comme un routeur "Zero-Delay" et n'est pas un goulot d'étranglement dans le pipeline.
+
 ## Mai
+### Vendredi 01.05
+Essayer d'utiliser la caméra sur la RPI4 avec le compute hat. Mais impossible de voire la caméra... Cepedant
+j'ai pu récupérer une RPI4B qui devrait faire l'affaire. Après lecture de la doc OpenHD il est préferable d'utiliser la library MMAL plutôt que libcam, car bien que déprécier elle permet d'attendre une latence plus faible.
+
+Une solution serait de flasher l'os d'OpenHD, le travail de bachelor portant sur la communication et non pas 
+sur la capture vidéo cela pourrait simplifier la mise en place de l'émetteur (cela demendra une analyse du projet OpenHD)
 
 ### Mecredi 20.05 15h00
 **Rendu intermédiaire** 
