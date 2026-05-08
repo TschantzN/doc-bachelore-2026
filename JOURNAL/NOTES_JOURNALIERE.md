@@ -1820,6 +1820,544 @@ j'ai pu récupérer une RPI4B qui devrait faire l'affaire. Après lecture de la 
 Une solution serait de flasher l'os d'OpenHD, le travail de bachelor portant sur la communication et non pas 
 sur la capture vidéo cela pourrait simplifier la mise en place de l'émetteur (cela demendra une analyse du projet OpenHD)
 
+
+récption depuis pc de la rpi4b
+```bash
+.\gst-launch-1.0 udpsrc address=0.0.0.0 port=1337 buffer-size=0 ! "video/x-h264,width=640,height=480,framerate=60/1,stream-format=byte-stream,profile=baseline" ! h264parse disable-passthrough=true ! d3d11h264dec ! queue max-size-buffers=1 leaky=downstream ! d3d11videosink sync=false async=false max-lateness=0
+```
+### Vendredi 08.05
+
+
+montage hardware, masse des 2 rpi relier, masse relier au pin 11 (BCM 17) par une pull down 10k. les deux pin 11 relier ensemble et au bouton. autre coter du bouton relier au 3.3v d'une des 2 carte. 
+
+#### 1. Le Code TX (Émetteur : `latency_tx.c`)
+
+
+
+attendre qu'on presse le bouton (Pin 11), s'assure que le STM32 est prêt (Pin 18), puis injecter immédiatement un faux paquet de 1400 octets.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+#include <sys/mman.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev0.0"
+
+// Numérotation BCM stricte pour /dev/gpiomem
+#define GPIO_BTN 17       // Pin physique 11 (Le Bouton)
+#define GPIO_HANDSHAKE 24 // Pin physique 18 (Le STM32)
+
+volatile unsigned *gpio;
+
+void setup_gpiomem() {
+    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
+    gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
+    close(mem_fd);
+
+    // Configurer le GPIO 24 (Handshake) en ENTRÉE (bits 12-14 du registre 2)
+    *(gpio + 2) &= ~(7 << 12); 
+    
+    // Configurer le GPIO 17 (Bouton) en ENTRÉE (bits 21-23 du registre 1)
+    *(gpio + 1) &= ~(7 << 21);
+}
+
+int main() {
+    int spi_fd;
+    uint32_t speed = 5000000; // 5 MHz
+    uint8_t bits = 8;
+    uint32_t mode = 0;
+
+    setup_gpiomem();
+
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) { perror("SPI open"); return 1; }
+
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+    // Faux paquet vidéo (rempli de 0xAA)
+    uint8_t buffer[CHUNK_SIZE];
+    memset(buffer, 0xAA, CHUNK_SIZE);
+
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (uint64_t)(uintptr_t)buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+        .cs_change = 0,
+    };
+
+    printf(">>> TX PRET. En attente du bouton sur la Pin 11...\n");
+
+    while (1) {
+        // 1. Attente active du front montant du BOUTON
+        while ( (*(gpio + 13) & (1 << GPIO_BTN)) == 0 );
+
+        // 2. Attente active du HANDSHAKE STM32
+        int stuck_counter = 0;
+        while ( (*(gpio + 13) & (1 << GPIO_HANDSHAKE)) == 0 ) {
+            stuck_counter++;
+            if (stuck_counter % 5000000 == 0) {
+                printf("TX Bloqué : Le STM32 n'est pas prêt (Pin 18 LOW)\n");
+            }
+        }
+
+        // 3. ENVOI IMMÉDIAT
+        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) {
+            perror("Erreur SPI");
+            break;
+        }
+
+        printf("[TX] Paquet test envoyé !\n");
+        
+        // Anti-rebond : on attend 500ms avant d'autoriser un nouveau test
+        usleep(500000); 
+    }
+
+    close(spi_fd);
+    return 0;
+}
+```
+
+---
+
+#### 2. Le Code RX (Chronomètre : `latency_rx.c`)
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <time.h>
+#include <pthread.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define GPIO_BTN 17 // Pin physique 11 (Le Bouton partagé avec le TX)
+#define PORT 1337   // Le port UDP d'écoute
+
+volatile unsigned *gpio;
+volatile uint64_t t_start = 0;
+volatile uint64_t t_end = 0;
+volatile int packet_received = 0;
+
+// Initialisation ultra-rapide du GPIO
+void setup_gpiomem() {
+    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
+    gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
+    close(mem_fd);
+
+    // Configurer le GPIO 17 en ENTRÉE
+    *(gpio + 1) &= ~(7 << 21);
+}
+
+// Fonction pour récupérer l'horloge système en nanosecondes
+uint64_t get_time_ns() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+
+// Thread réseau : Bloqué jusqu'à ce qu'un paquet UDP arrive
+void* udp_listener(void* arg) {
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    struct sockaddr_in servaddr = {0};
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port = htons(PORT);
+    bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr));
+
+    uint8_t buffer[2000];
+    
+    while(1) {
+        // Bloque le thread ici jusqu'à la réception
+        recvfrom(sockfd, (char *)buffer, sizeof(buffer), 0, NULL, NULL);
+        
+        // PAQUET REÇU : on marque l'heure d'arrivée
+        t_end = get_time_ns();
+        packet_received = 1;
+    }
+    return NULL;
+}
+
+int main() {
+    setup_gpiomem();
+    
+    // Lancement du thread d'écoute réseau
+    pthread_t thread_id;
+    pthread_create(&thread_id, NULL, udp_listener, NULL);
+
+    printf(">>> RX CHRONO PRET. Écoute sur le port UDP %d et la Pin 11...\n", PORT);
+
+    while (1) {
+        packet_received = 0;
+        
+        // 1. Attente active du BOUTON
+        while ( (*(gpio + 13) & (1 << GPIO_BTN)) == 0 );
+
+        // 2. LE BOUTON EST PRESSÉ ! Lancement du chrono
+        t_start = get_time_ns();
+        printf("Bouton détecté, attente du paquet réseau...\n");
+
+        // 3. Attente de la validation du thread réseau
+        while (!packet_received) {
+            // Timeout de sécurité (1 seconde)
+            if (get_time_ns() - t_start > 1000000000ULL) {
+                printf("[ERREUR] Timeout : Le paquet a été perdu en vol !\n");
+                break;
+            }
+        }
+
+        // 4. Calcul de la latence de transmission pure
+        if (packet_received) {
+            double latency_ms = (t_end - t_start) / 1000000.0;
+            printf("==========================================\n");
+            printf("LATENCE DE TRANSMISSION MESURÉE : %.3f ms\n", latency_ms);
+            printf("==========================================\n\n");
+        }
+
+        // Anti-rebond (500ms) avant le prochain test
+        usleep(500000); 
+    }
+    return 0;
+}
+```
+
+#### Compilation et Exécution :
+* Sur le TX : `gcc latency_tx.c -o latency_tx` puis `sudo ./latency_tx`
+* Sur le RX : `gcc latency_rx.c -o latency_rx -pthread` puis `sudo ./latency_rx`
+
+
+video rpi to rpi 
+```bash
+nice -n -20 gst-launch-1.0 -v udpsrc address=0.0.0.0 port=1337 buffer-size=0 ! "video/x-h264,width=640,height=480,framerate=60/1,stream-format=byte-stream,profile=baseline" ! h264parse disable-passthrough=true config-interval=-1 ! v4l2h264dec ! queue max-size-buffers=1 leaky=downstream ! kmssink sync=false max-lateness=0
+```
+
+on va faire une test ou l'on va envoyer 10 packet un par un pour faire une moyennes (on affiche quand meme les résultat intérédiaire). puis une burst de 10 packet et on ne mesure que la latence totale que l on divisera par 10 pour obtenir une moyenne dans un flux sans overhead.
+
+
+Le programme va donc fonctionner comme une **machine à états** :
+
+* **Appuis 1 à 10 :** Le TX envoie 1 paquet. Le RX mesure et accumule. Au 10ème, il affiche la moyenne.
+* **Appui 11 :** Le TX envoie une rafale de 10 paquets instantanément. Le RX attend le 10ème, fige le chrono, calcule le total et divise par 10 pour te donner la latence "en flux pur" (sans overhead de départ).
+* *Le cycle recommence ensuite.*
+
+Voici les deux codes mis à jour avec cette logique.
+
+#### 1. Le Code TX (Émetteur de test : `latency_tx.c`)
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+#include <sys/mman.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev0.0"
+
+#define GPIO_BTN 17       // Pin physique 11 (Le Bouton)
+#define GPIO_HANDSHAKE 24 // Pin physique 18 (Le STM32)
+
+volatile unsigned *gpio;
+
+void setup_gpiomem() {
+    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
+    gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
+    close(mem_fd);
+
+    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en ENTRÉE
+    *(gpio + 1) &= ~(7 << 21); // GPIO 17 en ENTRÉE
+}
+
+int main() {
+    int spi_fd;
+    uint32_t speed = 5000000; // 5 MHz
+    uint8_t bits = 8;
+    uint32_t mode = 0;
+
+    setup_gpiomem();
+
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) { perror("SPI open"); return 1; }
+
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+    uint8_t buffer[CHUNK_SIZE];
+    memset(buffer, 0xAA, CHUNK_SIZE);
+
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (uint64_t)(uintptr_t)buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+        .cs_change = 0,
+    };
+
+    int test_step = 0;
+
+    while (1) {
+        if (test_step < 10) {
+            printf("\n>>> [UNITAIRE %d/10] Appuie sur le bouton pour envoyer 1 paquet...\n", test_step + 1);
+        } else {
+            printf("\n>>> [BURST TEST] Appuie sur le bouton pour envoyer la RAFALE de 10 paquets...\n");
+        }
+
+        // 1. Attente du BOUTON
+        while ( (*(gpio + 13) & (1 << GPIO_BTN)) == 0 );
+
+        if (test_step < 10) {
+            // --- ENVOI UNITAIRE ---
+            int timeout = 0, stm_ready = 1;
+            while ( (*(gpio + 13) & (1 << GPIO_HANDSHAKE)) == 0 ) {
+                if (timeout++ > 5000000) { stm_ready = 0; break; }
+            }
+            if (stm_ready) {
+                ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr);
+                printf(" -> Paquet envoyé.\n");
+                test_step++;
+            } else {
+                printf("[ERREUR] STM32 bloqué.\n");
+            }
+        } else {
+            // --- ENVOI EN RAFALE (BURST) ---
+            int paquets_ok = 0;
+            for (int i = 0; i < 10; i++) {
+                int timeout = 0, stm_ready = 1;
+                while ( (*(gpio + 13) & (1 << GPIO_HANDSHAKE)) == 0 ) {
+                    if (timeout++ > 5000000) { stm_ready = 0; break; }
+                }
+                if (!stm_ready) {
+                    printf("[ERREUR] STM32 a planté au paquet %d.\n", i+1);
+                    break;
+                }
+                ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr);
+                paquets_ok++;
+                usleep(100); // 100us pour laisser le STM32 réagir
+            }
+            if (paquets_ok == 10) {
+                printf(" -> Rafale de 10 paquets envoyée !\n");
+                test_step = 0; // Réinitialise le cycle de test
+            }
+        }
+
+        // Anti-rebond du bouton
+        usleep(500000); 
+    }
+
+    close(spi_fd);
+    return 0;
+}
+
+```
+
+---
+
+### 2. Le Code RX (Chronomètre de précision : `latency_rx.c`)
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <time.h>
+#include <pthread.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define GPIO_BTN 17 
+#define PORT 1337   
+
+volatile unsigned *gpio;
+volatile uint64_t t_start = 0;
+volatile uint64_t t_end = 0;
+volatile int packet_count = 0;
+
+void setup_gpiomem() {
+    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
+    gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
+    close(mem_fd);
+    *(gpio + 1) &= ~(7 << 21); // GPIO 17 en ENTRÉE
+}
+
+uint64_t get_time_ns() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+
+// Thread réseau
+void* udp_listener(void* arg) {
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    struct sockaddr_in servaddr = {0};
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port = htons(PORT);
+    bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr));
+
+    uint8_t buffer[2000];
+    
+    while(1) {
+        recvfrom(sockfd, (char *)buffer, sizeof(buffer), 0, NULL, NULL);
+        t_end = get_time_ns(); // Mise à jour de l'heure d'arrivée
+        packet_count++;        // Incrémente le compteur de paquets reçus
+    }
+    return NULL;
+}
+
+int main() {
+    setup_gpiomem();
+    
+    pthread_t thread_id;
+    pthread_create(&thread_id, NULL, udp_listener, NULL);
+
+    int test_step = 0;
+    double sum_latencies = 0;
+
+    printf(">>> RX CHRONO PRET. Initialisation...\n");
+
+    while (1) {
+        // Préparation des variables partagées avant l'appui du bouton
+        packet_count = 0;
+        
+        // 1. Attente du BOUTON
+        while ( (*(gpio + 13) & (1 << GPIO_BTN)) == 0 );
+
+        // 2. Lancement du chrono
+        t_start = get_time_ns();
+        
+        int target_packets = (test_step < 10) ? 1 : 10;
+        
+        // 3. Attente réseau avec Timeout
+        while (packet_count < target_packets) {
+            if (get_time_ns() - t_start > 1500000000ULL) { // Timeout 1.5s
+                printf("[ERREUR] Timeout ! Seulement %d/%d paquet(s) reçu(s).\n", packet_count, target_packets);
+                test_step = 0; 
+                sum_latencies = 0;
+                break;
+            }
+        }
+
+        // 4. Calculs et Affichage
+        if (packet_count == target_packets) {
+            double latency_ms = (t_end - t_start) / 1000000.0;
+            
+            if (test_step < 10) {
+                // Phase 1 : Test unitaire
+                printf("Test %d/10 | Latence : %.3f ms\n", test_step + 1, latency_ms);
+                sum_latencies += latency_ms;
+                
+                if (test_step == 9) {
+                    printf("------------------------------------------\n");
+                    printf("MOYENNE UNITAIRE : %.3f ms\n", sum_latencies / 10.0);
+                    printf("------------------------------------------\n");
+                }
+                test_step++;
+            } else {
+                // Phase 2 : Test en rafale
+                printf("==========================================\n");
+                printf("LATENCE BURST TOTALE (10 paquets) : %.3f ms\n", latency_ms);
+                printf("MOYENNE EN FLUX (Latence / 10)    : %.3f ms\n", latency_ms / 10.0);
+                printf("==========================================\n\n");
+                
+                // Fin du cycle, on repart à zéro
+                test_step = 0;
+                sum_latencies = 0;
+            }
+        }
+
+        // Anti-rebond
+        usleep(500000); 
+    }
+    return 0;
+}
+
+```
+
+
+```bash
+rainette@raspberrypi:~/TB_Nathan_Tschantz $ ./latency_rx
+>>> RX CHRONO PRET. Initialisation...
+Test 1/10 | Latence : 10.551 ms
+Test 2/10 | Latence : 11.199 ms
+Test 3/10 | Latence : 10.982 ms
+Test 4/10 | Latence : 11.348 ms
+Test 5/10 | Latence : 10.740 ms
+Test 6/10 | Latence : 11.162 ms
+Test 7/10 | Latence : 11.071 ms
+Test 8/10 | Latence : 11.167 ms
+Test 9/10 | Latence : 11.216 ms
+Test 10/10 | Latence : 11.192 ms
+------------------------------------------
+MOYENNE UNITAIRE : 11.063 ms
+------------------------------------------
+==========================================
+LATENCE BURST TOTALE (10 paquets) : 124.721 ms
+MOYENNE EN FLUX (Latence / 10)    : 12.472 ms
+==========================================
+
+Test 1/10 | Latence : 10.819 ms
+Test 2/10 | Latence : 10.654 ms
+Test 3/10 | Latence : 10.468 ms
+Test 4/10 | Latence : 15.534 ms
+Test 5/10 | Latence : 10.350 ms
+Test 6/10 | Latence : 16.148 ms
+Test 7/10 | Latence : 10.311 ms
+Test 8/10 | Latence : 10.473 ms
+Test 9/10 | Latence : 10.212 ms
+Test 10/10 | Latence : 13.688 ms
+------------------------------------------
+MOYENNE UNITAIRE : 11.866 ms
+------------------------------------------
+==========================================
+LATENCE BURST TOTALE (10 paquets) : 151.813 ms
+MOYENNE EN FLUX (Latence / 10)    : 15.181 ms
+==========================================
+
+Test 1/10 | Latence : 10.151 ms
+Test 2/10 | Latence : 10.158 ms
+Test 3/10 | Latence : 10.054 ms
+Test 4/10 | Latence : 14.248 ms
+Test 5/10 | Latence : 13.643 ms
+Test 6/10 | Latence : 10.003 ms
+Test 7/10 | Latence : 10.291 ms
+Test 8/10 | Latence : 9.814 ms
+...
+
+```
+
+- mesure de la latence de la caméra en faisant reboucler la vidéo directement sur la rpi4b.
+  - excellent résultat aussi (5 a 7 ms)
+- plus qu'a chercher les 100ms réstante dans le système
+
+```bash
+nice -n -20 gst-launch-1.0 -v udpsrc address=0.0.0.0 port=1337 buffer-size=0 ! "video/x-h264,width=640,height=480,framerate=60/1,stream-format=byte-stream,profile=baseline" ! h264parse disable-passthrough=true config-interval=-1 ! avdec_h264 max-threads=4 ! queue max-size-buffers=1 leaky=downstream ! autovideosink sync=false
+```
+vérifier la commande.
 ### Mecredi 20.05 15h00
 **Rendu intermédiaire** 
 
@@ -1828,8 +2366,3 @@ sur la capture vidéo cela pourrait simplifier la mise en place de l'émetteur (
 
 ### Jeudi 23.07 avant 11h00
 **Rendu final du rapport**
-
-
-
-
-

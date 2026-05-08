@@ -378,10 +378,17 @@ gantt
 
 ### Vendredi 01.05
 - Essayer d'utiliser la caméra sur la RPI4 avec le compute hat. Mais impossible de voire la caméra.
+- récuperation d'une RPI4B
 
 ### Samedi 02.05
 - Rédaction de rapport
 
+### Vendredi 08.05
+- mesure de latence réseau avec le montage du bouton (voire note journalière)
+  - excellent résultat (10 a 15 ms)
+- mesure de la latence de la caméra en faisant reboucler la vidéo directement sur la rpi4b.
+  - excellent résultat aussi (5 a 7 ms)
+- plus qu'a chercher les 100ms réstante dans le système
 ### Mecredi 20.05 15h00
 **Rendu intermédiaire**
 
