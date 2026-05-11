@@ -1,0 +1,88 @@
+\section{Bilan de liaison et calcul de portée théorique}
+
+L'argument principal en faveur du Wi-Fi HaLow (IEEE 802.11ah) pour le pilotage de drones FPV réside 
+dans sa capacité à maintenir une liaison stable sur de grandes distances, y compris en présence 
+d'obstacles. Pour valider mathématiquement cette capacité, un bilan de liaison (\textit{Link Budget}) a 
+été calculé.
+
+Ce calcul permet d'estimer la portée théorique maximale du système en condition de ligne de vue directe 
+(\textit{Line-Of-Sight} - LOS), avant d'évaluer la marge disponible pour la pénétration des obstacles.
+
+\subsection{Paramètres du système (Wi-Fi HaLow 915 MHz)}
+Les performances RF de l'émetteur (MM8108) et du récepteur déterminent la puissance du signal. Les valeurs 
+suivantes sont basées sur les spécifications techniques du matériel utilisé et la configuration logicielle 
+retenue (MCS 2 / Bande passante de 2 MHz) :
+
+\begin{itemize}
+    \item \textbf{Fréquence d'opération ($f$) :} 915.5 MHz (Domaine US, Canal 27).
+    \item \textbf{Puissance d'émission ($P_{tx}$) :} +20 dBm (100 mW), puissance typique maximale configurée 
+    par le SDK.
+    \item \textbf{Gain de l'antenne d'émission ($G_{tx}$) :} +2 dBi (Antenne dipôle standard).
+    \item \textbf{Gain de l'antenne de réception ($G_{rx}$) :} +2 dBi.
+    \item \textbf{Sensibilité du récepteur ($S_{rx}$) :} -98 dBm (Seuil minimum théorique pour décoder du 
+    QPSK / MCS 2 sur 2 MHz).
+    \item \textbf{Marge d'évanouissement (\textit{Fade Margin} - $F_m$) :} 10 dB. Cette marge de sécurité 
+    est vitale dans les communications mobiles (drone) pour compenser les variations soudaines du signal dues 
+    aux réflexions (trajets multiples) ou aux inclinaisons d'antennes.
+\end{itemize}
+
+\subsection{Calcul de l'atténuation maximale tolérable}
+L'atténuation maximale tolérable par le système (le \textit{Maximum Path Loss}) correspond à la différence 
+entre la puissance de sortie rayonnée et la limite de sensibilité du récepteur, diminuée de la marge de sécurité.
+
+L'équation du bilan de liaison s'écrit :
+$$L_{max} = P_{tx} + G_{tx} + G_{rx} - S_{rx} - F_m$$
+
+En injectant nos paramètres matériels :
+$$L_{max} = 20\text{ dBm} + 2\text{ dBi} + 2\text{ dBi} - (-98\text{ dBm}) - 10\text{ dB}$$
+$$L_{max} = 112\text{ dB}$$
+
+Le système peut donc subir une perte de signal de \textbf{112 dB} dans les airs avant que la liaison vidéo ne 
+coupe de manière irrémédiable.
+
+\subsection{Estimation de la portée en espace libre (FSPL)}
+L'atténuation du signal dans l'air, sans aucun obstacle, est définie par le modèle de perte en espace libre 
+(\textit{Free Space Path Loss} - FSPL). L'équation logarithmique du FSPL est la suivante :
+$$FSPL(dB) = 20 \log_{10}(d) + 20 \log_{10}(f) + 32.44$$
+Où :
+\begin{itemize}
+    \item $d$ est la distance en kilomètres (km).
+    \item $f$ est la fréquence en mégahertz (MHz).
+\end{itemize}
+
+Pour trouver la distance maximale théorique ($d_{max}$), on pose l'équation $FSPL = L_{max}$ :
+$$112 = 20 \log_{10}(d_{max}) + 20 \log_{10}(915.5) + 32.44$$
+$$112 = 20 \log_{10}(d_{max}) + 59.23 + 32.44$$
+$$112 = 20 \log_{10}(d_{max}) + 91.67$$
+$$20 \log_{10}(d_{max}) = 20.33$$
+$$\log_{10}(d_{max}) \approx 1.0165$$
+$$d_{max} = 10^{1.0165} \approx \mathbf{10.38 \text{ kilomètres}}$$
+
+\subsection{Validation empirique en environnement complexe (NLOS)}
+Pour confronter la marge d'atténuation théorique à la réalité du terrain, des tests de portée ont été réalisés en 
+conditions strictement non-optimales (\textit{Non-Line-Of-Sight} - NLOS) :
+\begin{itemize}
+    \item \textbf{Test 1 - Pénétration extrême (30 mètres) :} L'émetteur a été placé dans une chambre et le récepteur 
+    dans une cave (mur en béton armé type "bunker"). La liaison vidéo s'est maintenue de manière fluide, bien qu'une 
+    orientation de l'antenne vers les ouvertures ait été nécessaire pour stabiliser le flux. Ce test prouve la capacité 
+    du 915 MHz à traverser des dalles de béton.
+    \item \textbf{Test 2 - Obstacles multiples (160 mètres) :} L'émetteur est resté à l'intérieur (derrière un mur de ferme 
+    de 40 cm d'épaisseur) tandis que le récepteur a été éloigné dans un champ à 160 mètres, à travers des arbres et soumis 
+    aux réflexions (trajets multiples) des maisons environnantes. L'image est restée parfaitement fluide jusqu'à la limite 
+    physique où la coupure est intervenue brutalement (comportement typique d'une démodulation numérique arrivant au seuil 
+    de sa sensibilité).
+\end{itemize}
+Ces essais confirment que l'immense surplus de puissance (budget de liaison) calculé précédemment est effectivement "consommé" 
+par la densité des obstacles, permettant une liaison vidéo FPV parfaitement utilisable dans des milieux où les ondes 5.8 GHz 
+classiques ne passeraient même pas le premier mur.
+
+\subsection{Conclusion du bilan de liaison}
+Le calcul théorique démontre que, sous des conditions idéales de ligne de vue directe (LOS) avec une marge de 
+sécurité de 10 dB, le système vidéo FPV basé sur le Wi-Fi HaLow peut porter jusqu'à \textbf{10 kilomètres}.
+
+En pratique, pour le pilotage d'un drone en environnement complexe (arbres, bâtiments, murs d'une ferme), 
+l'opérateur n'atteindra pas ces 10 km. Cependant, cette immense réserve de puissance (\textit{Link Budget} 
+excédentaire) sera absorbée par les obstacles. C'est précisément ce surplus de puissance, couplé à la longueur 
+d'onde pénétrante du Sub-1 GHz, qui garantit la stabilité du flux vidéo en situation de NLOS 
+(\textit{Non-Line-Of-Sight}) à des distances de plusieurs centaines de mètres, là où les fréquences 
+5.8 GHz standard échouent totalement.

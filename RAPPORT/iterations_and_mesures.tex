@@ -1,0 +1,124 @@
+\section{Itérations matérielles et analyse des performances}
+
+Afin d'isoler avec précision les goulots d'étranglement du système et de valider l'architecture proposée, 
+une série de mesures de performances a été menée. L'objectif de cette démarche itérative est de quantifier 
+séparément le temps de transit matériel, le temps de transport réseau, puis le temps de traitement de 
+l'image, afin d'établir un bilan "Glass-to-Glass" complet.
+
+\subsection{Profilage théorique de la chaîne d'émission}
+La première étape a consisté à profiler les temps de traitement incompressibles des composants d'émission.
+
+\subsubsection{Temps d'encodage matériel (Jetson Nano)}
+Pour mesurer le temps de traitement de l'encodeur matériel Nvidia (\texttt{nvv4l2h264enc}), les outils de 
+traçage natifs de GStreamer\index{GStreamer} ont été employés via la variable d'environnement 
+\texttt{GST\_TRACERS="latency(flags=element)"}. L'analyse des journaux d'exécution a démontré que le 
+composant matériel traite et compresse une trame vidéo en un temps extrêmement stable d'environ 
+\textbf{1.2 ms}.
+
+\subsubsection{Mesure au cycle d'horloge du traitement MCU (STM32)}
+Pour profiler le transfert SPI\index{SPI} et l'encapsulation LwIP\index{LwIP}, les fonctions classiques 
+(\texttt{HAL\_GetTick()}) manquaient de résolution. Le code a donc exploité le composant matériel ARM 
+CoreSight DWT\index{DWT} (\textit{Data Watchpoint and Trace}). Le registre \texttt{DWT->CYCCNT} 
+s'incrémente à chaque coup d'horloge (160 MHz), offrant une résolution de 6.25 nanosecondes.
+
+\begin{lstlisting}[language=C]
+// Demarrage du chronometre DWT dans l'interruption SPI
+dwt_start = DWT->CYCCNT;
+
+// ... [Encapsulation pbuf_alloc et envoi udp_sendto] ...
+
+// Arret du chronometre et calcul du temps en microsecondes
+dwt_end = DWT->CYCCNT;
+mcu_cycles = dwt_end - dwt_start;
+uint32_t freq_mhz = SystemCoreClock / 1000000; // 160 MHz
+uint32_t time_us = mcu_cycles / freq_mhz;
+\end{lstlisting}
+
+L'extraction de cette métrique a révélé un temps de traitement MCU ultra-court de 
+\textbf{0.8 ms par paquet}. Le temps total d'émission d'une image (encodage + 2 paquets de 1400 octets 
+transférés à 5 MHz) s'élève théoriquement à :
+$$Latence_{TX} = 1.2 + \left( 2 \times (2.24 + 0.8) \right) = \mathbf{7.28\text{ ms}}$$
+
+\subsection{Caractérisation physique du transport radio}
+Pour confronter cette théorie à la réalité et isoler la latence de transmission pure, une architecture de 
+test à "déclencheur commun" a été mise en place, s'affranchissant des problèmes de synchronisation 
+d'horloges réseau.
+
+Deux Raspberry Pi 4B ont été utilisées (TX et RX), avec leurs masses reliées et un bouton poussoir 
+connecté simultanément sur leur broche \texttt{BCM 17}. Lorsqu'on presse le bouton, les deux programmes 
+C (exploitant \texttt{mmap} sur \texttt{/dev/gpiomem}) détectent le front montant au même instant. 
+Le TX injecte un paquet de test via SPI, et le RX fige son chronomètre haute résolution à la réception 
+du paquet UDP.
+
+Les résultats d'un test en rafale (\textit{Burst}) de 10 paquets consécutifs ont donné un temps total de 124 ms, 
+soit une moyenne en flux de \textbf{12.47 ms} par paquet. Ce résultat empirique, très proche de la 
+théorie, prouve que le transport radio Sub-1 GHz est extrèmement rapide.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{imgs/button_latency_test_schematic.png}
+    \caption{Schéma du système de test}
+    \label{fig:button_latency_test_schematic}
+\end{figure}
+
+\subsection{Isolement de la capture et abandon de la piste OpenHD}
+L'hypothèse suivante ciblait la pile logicielle de capture vidéo de l'OS. Le déploiement d'un système 
+optimisé \textit{ad hoc} comme OpenHD\index{OpenHD} a été envisagé. 
+
+Avant d'engager cette lourde modification, un test de "boucle locale" (\textit{loopback}) a été réalisé 
+sur la Raspberry Pi 4B : capturer le flux caméra, l'encoder et l'afficher directement sur la même carte 
+sans passer par le réseau. La latence mesurée fut de \textbf{5 à 7 ms}. Ce résultat a prouvé que la 
+capture et la pile logicielle standard n'étaient pas le goulot d'étranglement. L'itération vers un OS 
+personnalisé a donc été abandonnée.
+
+\subsection{Bilan "Glass-to-Glass" et latence résiduelle}
+La latence "Glass-to-Glass" absolue (entre un événement réel et son affichage sur l'écran final) a été 
+mesurée entre \textbf{130 ms et 140 ms}.
+
+L'élimination mathématique de la capture locale ($\sim$7 ms) et du transport radio ($\sim$12.5 ms) permet 
+d'isoler un délai inexpliqué de plus de 100 ms. Cette latence résiduelle provient de deux limitations 
+inhérentes au matériel grand public :
+\begin{enumerate}
+    \item \textbf{L'Image Signal Processor (ISP) :} Comme identifié précédemment, l'ISP conserve 4 images dans une 
+    file d'attente pour ses calculs d'exposition, générant jusqu'à 166 ms de délai à 24 FPS. (Contourné 
+    partiellement en suréchantillonnant le capteur à 60 FPS).
+    \item \textbf{Le pipeline de réception logiciel :} Le parseur GStreamer (\texttt{h264parse}) doit retenir 
+    une trame entière pour valider l'intégrité du flux UDP brut. De plus, les gestionnaires de fenêtres 
+    des stations de diagnostic (Windows DWM ou X11) imposent souvent un \textit{Triple Buffering} 
+    (synchronisation verticale), ajoutant mécaniquement 50 à 100 ms de latence incompressible avant 
+    l'affichage sur les écrans standards.
+\end{enumerate}
+
+Le système matériel embarqué et le pont Wi-Fi HaLow ont donc été optimisés à leur limite absolue. La 
+latence restante n'est pas le fait du réseau Sub-1 GHz, mais bien des couches d'abstraction d'acquisition 
+et d'affichage.
+
+\subsection{Bilan récapitulatif des temps de traitement}
+Les différentes itérations matérielles et les mesures de profilage ont permis d'établir une cartographie 
+précise des temps de traitement de chaque maillon de la chaîne, indépendamment des buffers d'affichage. 
+
+\begin{itemize}
+    \item \textbf{Encodage matériel (Jetson / RPi) :} Les outils de traçage estiment l'encodage H.264 d'une 
+    trame à environ \textbf{2 ms}.
+    \item \textbf{Transfert SPI :} Le transfert d'un paquet de 1400 octets à 5 MHz requiert environ 
+    \textbf{2.2 ms}.
+    \item \textbf{Traitement MCU (STM32) :} Le temps d'encapsulation LwIP, mesuré au cycle d'horloge, est de \textbf{0.8 à 1 ms}.
+    \item \textbf{Temps de vol radio (Air time) :} Après la désactivation des modes d'économie d'énergie (\textit{Power Saving Mode}) sur le module EKH19, qui induisaient artificiellement une latence de 22 ms, le temps de réponse réseau pur (Ping) entre le PC de réception et le relais s'est stabilisé entre \textbf{3 et 5 ms}.
+    \item \textbf{Décodage matériel (RX) :} Les temps de décodage sont très similaires d'une plateforme à l'autre : entre \textbf{0.5 et 1 ms} sur le GPU du PC portable, et environ \textbf{2 à 3 ms} sur la Raspberry Pi 4.
+\end{itemize}
+
+Ce bilan théorique (Encodage + SPI + MCU + Air time + Décodage) donne une somme d'environ \textbf{10 à 13 ms}. Ce résultat mathématique corrobore parfaitement la mesure physique de \textbf{12.47 ms} obtenue lors du test en rafale avec le déclencheur matériel (bouton partagé entre les deux RPi). De même, le test de boucle locale (capture et affichage sur la même carte) mesuré entre 5 et 7 ms valide notre estimation de 2 ms d'encodage et 3 ms de décodage couplés à un très léger \textit{overhead} de l'OS.
+
+\subsection{Bilan "Glass-to-Glass" et perspectives (Rendu intermédiaire)}
+Malgré la fulgurance démontrée du pont réseau Sub-1 GHz, la latence "Glass-to-Glass" absolue (le délai entre un événement réel et son affichage sur l'écran du pilote) mesurée lors de nos derniers essais se situe entre \textbf{130 ms et 140 ms} (sur une architecture combinant RPi 4B et RPi Compute Module).
+
+Ce décalage met en évidence une latence inexpliquée d'environ 120 ms. Dans le cadre de ce rendu intermédiaire, la source exacte de cette latence résiduelle reste à identifier avec certitude. 
+
+Plusieurs hypothèses guideront la suite de ce travail de Bachelor :
+\begin{enumerate}
+    \item \textbf{Goulot d'étranglement sous charge (MCU) :} Une hypothèse supposait qu'un bombardement massif de paquets vidéo ralentissait le STM32 par rapport à un simple test de ping. Cependant, si le traitement MCU était le goulot d'étranglement, les mémoires tampons déborderaient et la latence s'accumulerait indéfiniment au fil du temps. L'image restant stable, cette piste semble peu probable.
+    \item \textbf{Le pipeline d'acquisition (ISP) :} Comme mentionné précédemment, les files d'attente internes de l'Image Signal Processor de la caméra pour l'exposition automatique pourraient être responsables d'une grande partie de ce délai incompressible avant même que l'image n'atteigne l'encodeur.
+    \item \textbf{L'encapsulation logicielle et l'affichage (RX) :} Bien que le test du bouton ait validé la pile réseau bas niveau du récepteur, l'empilement logiciel GStreamer (\texttt{h264parse}) et la synchronisation verticale des écrans de restitution restent des sources potentielles de rétention d'image.
+\end{enumerate}
+
+La suite de ce projet se concentrera sur l'isolation stricte de ces dernières variables, afin de cerner l'origine de ces 120 millisecondes et de déterminer les optimisations ultimes possibles pour rapprocher ce système des standards de l'industrie FPV.

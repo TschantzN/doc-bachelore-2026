@@ -1,0 +1,57 @@
+\section{Évolution de l'émetteur : L'itération OpenHD}
+
+L'analyse des performances de l'architecture initiale basée sur la Nvidia Jetson Nano a mis en exergue un 
+goulot d'étranglement matériel majeur : l'Image Signal Processor (ISP)\index{ISP} de la caméra, qui impose 
+une file d'attente logicielle inévitable générant environ 130 ms de latence résiduelle (à 30 FPS). Afin de 
+s'affranchir de cette limitation et de repousser les limites du temps réel, une évolution complète du 
+système embarqué a été étudiée.
+
+\subsection{Changement de paradigme matériel : La Raspberry Pi 4B}
+Pour reprendre le contrôle total sur le flux vidéo dès la sortie du capteur CMOS\index{Capteur CMOS}, la 
+Jetson Nano a été remplacée par une \textbf{Raspberry Pi 4B}\index{Raspberry Pi} agissant comme nouvel 
+émetteur. 
+
+Bien que la Jetson soit théoriquement plus puissante pour l'encodage H.265, l'écosystème logiciel de la 
+Raspberry Pi offre un avantage critique pour la vidéo basse latence. Sous Linux standard, l'accès à la 
+caméra passe par les API modernes telles que \texttt{libcamera} ou \texttt{V4L2}\index{V4L2}, qui implémentent 
+des tampons de mémoire (\textit{buffers}) complexes pour garantir la qualité de l'image (Exposition, Balance 
+des blancs) au détriment de la vitesse.
+
+\subsection{L'écosystème OpenHD et l'API MMAL}
+Au lieu de redévelopper une couche logicielle d'acquisition complète, le choix s'est porté sur l'utilisation 
+du système d'exploitation du projet \textit{OpenHD}\index{OpenHD}. OpenHD est un projet \textit{open-source} 
+de référence dans le domaine de la transmission vidéo numérique FPV.
+
+Bien que ce projet ne traite pas directement de l'intégration avec notre modem Wi-Fi HaLow via SPI, son OS 
+est optimisé pour un accès \textit{Bare-Metal} aux périphériques. L'atout majeur de l'OS OpenHD réside dans 
+son utilisation de l'API \textbf{MMAL} (\textit{Multimedia Abstraction Layer}). 
+Bien que considérée comme dépréciée par la fondation Raspberry Pi au profit de \texttt{libcamera}, l'API MMAL 
+permet un accès direct (\textit{Zero-Copy}) au capteur de la caméra et à l'encodeur matériel (H.264) du 
+processeur Broadcom, contournant intégralement les tampons de l'ISP.
+
+\subsection{Intégration logicielle (SPI et Capture)}
+Le portage du système a nécessité la réécriture du programme de transfert C. 
+Au lieu de dépendre d'un pipeline GStreamer\index{GStreamer} externe générant un délai, le nouveau programme 
+d'émission s'interface directement avec l'encodeur MMAL. 
+
+La séquence de fonctionnement adaptée est la suivante :
+\begin{enumerate}
+    \item \textbf{Activation de l'interface matérielle :} Chargement du module noyau SPI (\texttt{sudo modprobe spidev}).
+    \item \textbf{Configuration du capteur :} Forçage matériel de la caméra en mode basse latence 
+    afin d'annuler les traitements d'image post-capture : 
+    \begin{lstlisting}[language=bash]
+v4l2-ctl -d /dev/video0 --set-ctrl low_latency_mode=1
+    \end{lstlisting}
+    \item \textbf{Synchronisation MCU :} Le mécanisme de \textit{Handshake} matériel (GPIO 78 vers 
+    GPIO 15 du STM32\index{STM32}) développé pour la Jetson a été conservé et mappé sur le \textit{header} 
+    GPIO de la Raspberry Pi pour éviter le débordement de la mémoire du modem.
+\end{enumerate}
+
+\subsection{Objectifs et perspectives de l'itération}
+Cette itération architecturale déplace l'effort de la puissance de compression (Jetson H.265) vers la 
+maîtrise pure de la chaîne d'acquisition (Raspberry Pi MMAL). L'objectif théorique de cette modification 
+est l'oblitération des 130 ms de latence introduites par l'ISP de la caméra. Associée à notre couche 
+réseau Wi-Fi HaLow optimisée (UDP Broadcast, MCS 2, No-ACK), cette configuration doit permettre 
+d'atteindre une latence \textit{Glass-to-Glass} inférieure à 60 ms, rivalisant ainsi directement 
+avec les systèmes numériques commerciaux opérant sur 5.8 GHz, tout en offrant une portée et une 
+pénétration d'obstacles drastiquement supérieures.

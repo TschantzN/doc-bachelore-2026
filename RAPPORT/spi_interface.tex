@@ -1,0 +1,47 @@
+\section{Interfaçage matériel et transfert SPI}
+
+Le transfert du flux vidéo compressé entre le processeur d'acquisition (Jetson / RPi) et le modem radio 
+(STM32) s'effectue via le bus matériel SPI. Cette étape est très importante car elle envoie les données 
+au MCU pour l'émission RF.
+
+\subsection{Portage de l'application d'émission (De Python à C)}
+Initialement développé en Python pour valider le concept, le programme lisant la sortie de GStreamer pour 
+l'injecter sur le bus SPI a été entièrement réécrit en C. 
+
+Ce portage répondait à trois impératifs de temps réel :
+\begin{enumerate}
+    \item \textbf{Élimination de la gestion mémoire asynchrone :} Le \textit{Garbage Collector} de Python 
+    induit des micro-pauses aléatoires incompatibles avec la stabilité d'un flux FPV.
+    \item \textbf{Désactivation des caches de l'OS :} En C, la fonction \texttt{setvbuf(pipe, NULL, 
+    \_IONBF, 0)} a été utilisée pour forcer le descripteur de fichier reliant GStreamer au programme 
+    à fonctionner en mode "zéro-buffer" (flux tendu).
+    \item \textbf{Précision des horloges :} Remplacement des temporisations logicielles incertaines par 
+    des lectures de registres GPIO\index{GPIO} matériels quasi-instantanées.
+\end{enumerate}
+
+\subsection{Contrôle de flux matériel (Handshake SPI)}
+Le transfert s'effectue sur le bus SPI à une fréquence d'horloge de 5 MHz. Mathématiquement, l'envoi 
+d'un paquet UDP contenant une charge utile de 1400 octets (soit 11 200 bits) à cette fréquence requiert 
+un temps de transmission physique incompressible. Ce temps théorique se calcule ainsi :
+$$T_{SPI} = \frac{1400 \times 8\text{ bits}}{5\,000\,000\text{ bits/s}} = 0.00224\text{ s} = \mathbf{2.24\text{ ms}}$$
+
+L'architecture UDP étant configurée sans acquittement, si l'ordinateur enchaîne l'envoi de ces paquets de 
+2.24 ms trop rapidement, la mémoire RAM du microcontrôleur STM32 déborde (\textit{Buffer Overrun}). 
+Des morceaux d'images sont écrasés avant même d'atteindre le module Wi-Fi, provoquant de sévères artefacts 
+visuels (effets de "bavure").
+
+Pour pallier ce problème, un mécanisme de \textit{Handshake} matériel a été implémenté via une broche de 
+signalisation dédiée (ex: GPIO 78 sur Jetson vers PD15 sur STM32) :
+
+\begin{lstlisting}[language=C]
+// Extrait du controle de flux materiel (Cote Linux)
+do {
+    lseek(gpio_fd, 0, SEEK_SET);
+    read(gpio_fd, &gpio_val, 1);
+} while (gpio_val == '0'); // Bloque tant que le STM32 est occupe
+\end{lstlisting}
+
+Le processus est le suivant : le STM32 abaisse ce signal (niveau BAS) dès qu'il reçoit un paquet de 1400 octets 
+via l'interruption SPI. Il ne le relève (niveau HAUT) que lorsque la couche réseau LwIP a fini de transférer 
+le paquet au module Wi-Fi HaLow. Cette synchronisation garantit un flux vidéo propre, dictant la cadence 
+de l'encodeur sans aucune perte interne au système.

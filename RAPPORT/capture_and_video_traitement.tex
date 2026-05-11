@@ -1,0 +1,84 @@
+\section{Capture et traitement du flux vidéo}
+
+Une fois le pont réseau Sub-1 GHz établi, le défi consiste à formater la source vidéo pour qu'elle puisse 
+traverser ce canal étroit sans générer de goulots d'étranglement. Cette section détaille les choix 
+logiciels, l'optimisation des paramètres de compression, et la gestion des tampons matériels.
+
+\subsection{Le framework GStreamer et l'optimisation H.264}
+Pour gérer l'acquisition, la compression et l'encapsulation de la vidéo, le framework \textit{open-source} 
+GStreamer\index{GStreamer} a été retenu de bout en bout. Son architecture modulaire permet de relier 
+directement la sortie d'un capteur matériel à un encodeur, en minimisant les copies en mémoire vive 
+(\textit{Zero-Copy}).
+
+La compression du flux exploite la norme H.264. La configuration a été pensée pour prioriser la vitesse 
+au détriment de l'efficacité de compression absolue. Trois paramètres critiques ont été forcés :
+\begin{itemize}
+    \item \textbf{Le contrôle de débit strict (CBR - \texttt{control-rate=1}) :} Le débit est verrouillé 
+    à 400 kbps pour éviter tout pic de données soudain qui saturerait le bus SPI.
+    \item \textbf{La désactivation des images bidirectionnelles (\texttt{num-B-Frames=0}) :} Très important
+    pour la basse latence. L'encodeur n'a plus besoin d'attendre l'image suivante pour calculer 
+    l'image courante.
+    \item \textbf{L'espacement des images clés (\texttt{idrinterval=1000}) :} L'envoi d'images clés 
+    (I-Frames), très volumineuses, est espacé au maximum. Limiter leur fréquence évite les rafales 
+    massives de paquets (\textit{bursts}) qui saturent la radio.
+\end{itemize}
+
+\subsection{Pipelines d'émission (TX)}
+Afin de valider cette configuration sur différentes architectures matérielles, les pipelines ont été 
+adaptés :
+\begin{lstlisting}[language=bash]
+# Sur Nvidia Jetson Nano (NVENC)
+gst-launch-1.0 nvarguscamerasrc ! \
+'video/x-raw(memory:NVMM),width=640,height=480,framerate=60/1' ! \
+nvv4l2h264enc bitrate=400000 control-rate=1 preset-level=1 \
+insert-sps-pps=true idrinterval=1000 maxperf-enable=1 num-B-Frames=0 ! \
+h264parse ! fdsink
+
+# Sur Raspberry Pi 4 (V4L2)
+gst-launch-1.0 v4l2src device=/dev/video0 ! \
+'video/x-raw,width=640,height=480,framerate=60/1' ! \
+v4l2h264enc extra-controls="controls,video_bitrate=400000,video_b_frames=0" ! \
+h264parse ! fdsink
+\end{lstlisting}
+
+\subsection{Pipelines de réception et d'affichage (RX)}
+À la réception, le défi s'inverse : il faut décoder et afficher le plus vite possible. L'élément critique 
+est \texttt{sync=false}, qui ordonne à GStreamer d'afficher chaque trame dès qu'elle est prête, en 
+ignorant les horodatages.
+\begin{lstlisting}[language=bash]
+# Sur Station PC Windows (Acceleration D3D11)
+gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! \
+"video/x-h264,width=640,height=480,stream-format=byte-stream" ! \
+h264parse disable-passthrough=true ! d3d11h264dec ! \
+queue max-size-buffers=1 leaky=downstream ! \
+d3d11videosink sync=false async=false max-lateness=0
+
+# Sur Station cible Raspberry Pi (Bare-Metal via KMS)
+gst-launch-1.0 -v udpsrc address=0.0.0.0 port=1337 buffer-size=0 ! \
+"video/x-h264,width=640,height=480,framerate=60/1,stream-format=byte-stream" ! \
+h264parse disable-passthrough=true config-interval=-1 ! v4l2h264dec ! \
+queue max-size-buffers=1 leaky=downstream ! \
+kmssink sync=false max-lateness=0
+\end{lstlisting}
+
+\subsection{Identification et contournement de la latence de l'ISP}
+Malgré ces optimisations, une latence visuelle globale persistait lors des premiers tests. L'analyse 
+différentielle a prouvé que la latence "fantôme" provenait de l'Image Signal Processor (ISP) matériel 
+de la caméra. 
+
+Pour effectuer les calculs d'exposition automatique (AE) et de balance des blancs (AWB), l'ISP conserve 
+systématiquement 4 images brutes dans une file d'attente avant de les transmettre à l'encodeur.
+Mathématiquement, pour un capteur configuré pour échantillonner à 24 images par seconde, la durée d'une 
+image est de $41.6\text{ ms}$. Le délai induit par les 4 buffers logiciels est donc de :
+$$Latence_{ISP} = 4 \times \left( \frac{1000}{24} \right) \approx 166.4\text{ ms}$$
+
+Pour contourner ce verrouillage matériel massif, la solution implémentée consiste à dissocier la fréquence 
+d'échantillonnage du capteur de la fréquence réseau. En forçant le capteur à capturer à 60 FPS, les 4 
+buffers de l'ISP sont purgés nettement plus vite ($4 \times 16.6\text{ ms} = 66.4\text{ ms}$), réduisant 
+instantanément la latence visuelle de 100 ms.
+
+\subsection{Outils de diagnostic réseau}
+En complément de GStreamer, des utilitaires standards ont été employés pour le diagnostic du flux. 
+\texttt{Netcat} (\texttt{nc}) a été utilisé pour rediriger manuellement les paquets UDP lors du 
+prototypage, tandis que \texttt{tcpdump}\index{Tcpdump} a permis de capturer les trames à la volée 
+sur les interfaces sans-fil pour valider la non-fragmentation des paquets HaLow.

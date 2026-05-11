@@ -1,0 +1,74 @@
+\section{Profilage et validation des performances}
+
+Afin d'isoler avec précision les goulots d'étranglement du système et de valider l'architecture proposée, une 
+série de mesures de performances a été menée. L'objectif est de quantifier le temps de transit d'une image 
+depuis le capteur jusqu'à l'antenne radio (Latence TX), puis son temps de traitement à la réception 
+(Latence RX), afin d'établir un bilan "Glass-to-Glass".
+
+\subsection{Profilage de la chaîne d'émission (TX)}
+
+\subsubsection{Temps d'encodage matériel (Jetson)}
+Pour mesurer le temps de traitement de l'encodeur matériel Nvidia (\texttt{nvv4l2h264enc}), les outils de 
+traçage natifs de GStreamer\index{GStreamer} ont été employés. L'activation de la variable d'environnement 
+\texttt{GST\_TRACERS="latency(flags=element)"} permet d'insérer des sondes (probes) automatiques entre chaque 
+élément du pipeline. 
+
+L'analyse des journaux d'exécution a démontré que le composant matériel traite et compresse une trame vidéo 
+en un temps extrêmement stable d'environ \textbf{1.2 ms}.
+
+\subsubsection{Mesure au cycle d'horloge du traitement MCU (STM32)}
+Pour profiler le temps mis par le microcontrôleur pour transférer un bloc de 1400 octets depuis le buffer 
+SPI\index{SPI} vers la pile réseau LwIP\index{LwIP}, les fonctions classiques de type \texttt{HAL\_GetTick()} 
+(résolution de l'ordre de la milliseconde) se sont avérées insuffisantes. 
+
+Le code exploite donc le composant matériel ARM CoreSight DWT\index{DWT} (\textit{Data Watchpoint and Trace}). 
+Le registre \texttt{DWT->CYCCNT} s'incrémente à chaque coup d'horloge du processeur. Le STM32 fonctionnant à 
+160 MHz, un cycle correspond à une résolution absolue de 6.25 nanosecondes.
+
+\begin{lstlisting}[language=C]
+// Demarrage du chronometre DWT dans l'interruption SPI
+dwt_start = DWT->CYCCNT;
+
+// ... [Encapsulation pbuf_alloc et envoi udp_sendto] ...
+
+// Arret du chronometre et calcul du temps en microsecondes
+dwt_end = DWT->CYCCNT;
+mcu_cycles = dwt_end - dwt_start;
+uint32_t freq_mhz = SystemCoreClock / 1000000; // 160 MHz
+uint32_t time_us = mcu_cycles / freq_mhz;
+\end{lstlisting}
+
+L'extraction de cette métrique a révélé un temps de traitement MCU ultra-court de \textbf{0.8 ms par paquet} 
+(soit environ 128 000 cycles d'horloge). Le STM32 agit donc comme un pont réseau "zéro-délai".
+
+\subsubsection{Bilan de la latence d'émission par image}
+Le temps d'émission d'une image complète est sérialisé par le \textit{Handshake} matériel. À un bitrate de 
+400 kbps et 24 FPS, une image pèse environ 2083 octets, nécessitant la transmission de 2 paquets de 1400 octets. 
+Le transfert SPI théorique à 5 MHz d'un paquet de 1400 octets prend 2.24 ms.
+
+Le temps total d'émission d'une image compressée est donc de :
+$$Latence_{TX} = T_{Encodeur} + \left( Nb_{Paquets} \times (T_{SPI} + T_{MCU}) \right)$$
+$$Latence_{TX} = 1.2\text{ ms} + \left( 2 \times (2.24\text{ ms} + 0.8\text{ ms}) \right) = \mathbf{7.28\text{ ms}}$$
+Ce temps d'à peine 7 millisecondes confirme l'excellence de l'architecture matérielle embarquée.
+
+\subsection{Profilage de la réception (RX)}
+Du côté de la station au sol embarquée (Raspberry Pi 4), le recours au décodage logiciel (\texttt{avdec\_h264}) 
+a été privilégié pour contourner la file d'attente du décodeur matériel.
+L'utilisation des \texttt{GST\_TRACERS} sur la station de réception a prouvé que le processeur ARM de la 
+Raspberry Pi parvient à décoder une trame entrante en une moyenne de \textbf{3.0 ms}, avec un affichage 
+quasi-instantané assuré par l'élément bas niveau \texttt{kmssink}.
+
+\subsection{Bilan final "Glass-to-Glass"}
+La latence "Glass-to-Glass" absolue (le délai entre un événement réel et son affichage sur l'écran du pilote) 
+a été mesurée de manière empirique en filmant un chronomètre à haute fréquence de rafraîchissement.
+
+La valeur stabilisée de cette latence se situe entre \textbf{160 ms et 200 ms}.
+
+Ce délai s'explique par la somme des traitements matériels incompressibles, principalement dominés par le temps 
+d'acquisition (la durée physique d'une trame), le buffer de l'ISP (Image Signal Processor) de la caméra 
+(évalué à environ 133 ms pour un échantillonnage à 30 FPS), et les temps de propagation radio de la modulation 
+Sub-1 GHz.
+
+Bien que cette latence soit supérieure aux 20-30 ms des systèmes FPV analogiques purs (5.8 GHz), elle reste 
+suffisamment basse et stable pour assurer la navigation d'un drone, tout en apportant l'avantage décisif d'une 
+liaison radio robuste capable de traverser d'importants obstacles physiques (NLOS).

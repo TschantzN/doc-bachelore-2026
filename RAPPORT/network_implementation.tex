@@ -1,0 +1,94 @@
+\section{Implémentation du réseau Wi-Fi HaLow}
+
+La norme IEEE 802.11 intègre intrinsèquement des mécanismes de fiabilité, tels que les accusés 
+de réception (ACK) et les retransmissions automatiques, destinés à garantir l'intégrité des données. 
+Cependant, dans le cadre d'un flux vidéo temps réel pour le FPV, la perte d'une trame est visuellement 
+préférable à l'attente d'une retransmission, qui induit une latence beaucoup trop élevée. L'architecture 
+réseau a donc été configurée pour s'affranchir de ces contraintes.
+
+\subsection{Stratégie de diffusion (UDP Broadcast et No-ACK)}
+Pour contourner l'attente des acquittements matériels de la couche MAC\index{Couche MAC}, l'application 
+embarquée sur le STM32 utilise le protocole de transport UDP sur une adresse IP de diffusion \textit{Broadcast}.
+
+Dans le code C exploitant la pile LwIP, l'adresse de destination est configurée sur l'adresse de diffusion 
+locale du sous-réseau :
+\begin{lstlisting}[language=C]
+IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 255);
+\end{lstlisting}
+
+En ciblant l'adresse \texttt{.255}, la couche réseau LwIP force l'en-tête Wi-Fi à utiliser l'adresse MAC 
+de destination \texttt{FF:FF:FF:FF:FF:FF}. Selon la norme 802.11, les trames diffusées à cette adresse 
+ne déclenchent aucun acquittement (ACK) de la part des récepteurs. L'émetteur expédie ainsi les paquets 
+en flux tendu, ce qui annule la latence induite par les retransmissions au prix de potentielles pertes 
+de paquets.
+
+De plus, la taille de la charge utile (\textit{Payload}) UDP a été fixée à 1400 octets :
+\begin{lstlisting}[language=C]
+struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, 1400, PBUF_REF);
+\end{lstlisting}
+Cette valeur approche la taille maximale d'une trame Ethernet standard (MTU), ce qui minimise le ratio 
+d'en-têtes (Overhead MAC+IP+UDP) par rapport aux données utiles.
+
+\subsection{Contournement des contraintes réglementaires (ETSI vs FCC)}
+Lors des premiers essais d'établissement de la liaison radio en MCS 1, une latence de base colossale 
+d'environ 670 ms a été observée sur de simples paquets de test (Ping). 
+
+L'analyse de ce délai a mis en évidence l'impact restrictif des normes réglementaires européennes (ETSI) 
+régissant la bande des 868 MHz. Ces normes imposent un mécanisme de partage des ondes strict appelé 
+\textit{Listen Before Talk} (LBT) ainsi que des restrictions de \textit{Duty Cycle} (temps d'émission 
+maximal autorisé). Le module radio retenait intentionnellement les paquets pour respecter ces seuils 
+légaux.
+
+Afin d'évaluer les performances brutes du changement de MCS sans ces bridages logiciels imposés par la 
+région, la configuration de l'émetteur et du récepteur a été basculée sur le domaine réglementaire 
+américain (FCC, bande des 915 MHz). L'utilisation du Canal 27 (915.5 MHz) a permis de désactiver 
+les mécanismes LBT, ramenant immédiatement la latence réseau de base à environ 27 ms pour des 
+paquets de 1450 octets.
+
+\subsection{Le routage et l'isolation IP (OpenWrt)}
+Pour éviter les conflits de routage sur la station de réception, le réseau FPV est strictement isolé 
+sur le sous-réseau \texttt{192.168.12.x}.
+
+Lors de l'implémentation, un conflit IP majeur bloquait la transmission : le routeur OpenWrt (récepteur) 
+possédait l'adresse \texttt{192.168.12.1} simultanément sur son interface Wi-Fi HaLow (\texttt{ahwlan}) 
+et sur son interface Ethernet locale (\texttt{lan}). Pour résoudre ce conflit, il a suffi de migrer le 
+LAN sur \texttt{192.168.13.1}.
+
+Concernant le transfert des données à travers le routeur, une première approche a été 
+testée : les paquets UDP entrants sur l'interface sans-fil étaient interceptés (via \texttt{tcpdump}) 
+puis redirigés manuellement vers le port Ethernet à l'aide de l'utilitaire \texttt{netcat} (\texttt{nc}). 
+Cependant, ce traitement en espace utilisateur (\textit{User-Space}) sollicitait lourdement le processeur 
+du routeur et induisait une latence importante.
+\begin{lstlisting}[language=bash]
+tcpdump -i wlan0 -U -s 0 -w - "udp port 1337" | nc 192.168.12.10 9999
+\end{lstlisting}
+
+Pour optimiser le routage, un pont logiciel (\textit{Bridge}) a finalement été forcé au niveau du système 
+d'exploitation du routeur :
+\begin{lstlisting}[language=bash]
+brctl addif br-ahwlan wlan0
+\end{lstlisting}
+Ce pont matériel permet au flux \textit{Broadcast} en provenance de l'interface sans-fil de traverser le 
+routeur et d'être répliqué directement sur le câble Ethernet(pour autant que la station de réception
+connectée soit sur le bon sous réseau) sans être intercepté ni traité par la pile 
+TCP/IP ou des utilitaires logiciels, économisant ainsi 10 à 20 ms de délai de traitement additionnel.
+
+\subsection{Validation de la bande passante vidéo}
+La désactivation de l'adaptation automatique de débit (\textit{Rate Control}) a été effectuée dans le SDK 
+via la fonction ATE (Automatic Test Equipement, fonction utilisé en interne pour vérifer le fonctionnement
+de certaine fonctionnalité durant les phases de tests) :
+\begin{lstlisting}[language=C]
+mmwlan_ate_override_rate_control(MMWLAN_MCS_2, MMWLAN_BW_2MHZ, MMWLAN_GI_NONE);
+\end{lstlisting}
+
+En forçant l'utilisation du \textbf{MCS 2} sur une largeur de bande de \textbf{2 MHz}, la modulation employée 
+(QPSK) garantit une excellente robustesse face aux obstacles physiques. Des mesures empiriques (par capture 
+\texttt{tcpdump}) ont validé un débit utile stable d'environ \textbf{1.34 Mbps} (120 paquets de 1400 octets 
+par seconde).
+
+Mathématiquement, un flux vidéo brut en résolution 480p (854x480) à 24 images par seconde (codé en 24 bits par pixel) 
+requiert un débit d'environ 236 Mbps. En appliquant une norme de compression vidéo moderne (H.264 / H.265) 
+configurée pour le streaming en temps réel, il est possible de forcer l'encodage vidéo à respecter un 
+certain débit (\textit{Bitrate}). Dans notre cas, les tests montreront par la suite que le taux de compression 
+offrant le meilleur compromis, évitant au maximum les engorgements et les ralentissements, se situe 
+autour de \textbf{400 kbps}.

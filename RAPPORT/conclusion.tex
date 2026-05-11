@@ -1,2 +1,42 @@
-\section{Conclusion}
-Conculsion (a signé)
+\section{Conclusion intermédiaire}
+
+Le pilotage de drones FPV (\textit{First Person View}) en environnement complexe se heurte depuis 
+toujours à l'incapacité des fréquences standards (2.4 GHz et 5.8 GHz) à pénétrer efficacement les 
+obstacles physiques. Ce travail de Bachelor vise à évaluer une solution de rupture technologique en
+ détournant la norme IEEE 802.11ah (Wi-Fi HaLow), opérant dans la bande Sub-1 GHz, pour y faire 
+ transiter un flux vidéo en temps réel.
+
+À ce stade d'avancement du projet, l'architecture fondamentale du système est non seulement 
+établie, mais ses performances ont été démontrées et mesurées de manière rigoureuse.
+
+\subsection{Bilan des réalisations}
+La première grande réussite de ce travail réside dans la maîtrise de la liaison radio HaLow. En 
+contournant les mécanismes d'acquittement de la couche MAC (utilisation de l'UDP Broadcast / mode No-ACK) 
+et en modifiant les configurations de routage, nous avons garanti un canal de transmission fluide et 
+déterministe. 
+
+La conception d'un pont de communication matériel (SPI vers Wi-Fi) sur un microcontrôleur STM32, couplé 
+à un mécanisme de \textit{handshake}, a permis de synchroniser le trafic vidéo sans perte. 
+L'approche itérative adoptée a été déterminante : l'utilisation initiale d'une plateforme surpuissante 
+(Nvidia Jetson Nano) a permis de certifier les temps d'encodage via le traçage logiciel GStreamer et 
+d'écarter tout doute sur les performances de compression. 
+
+Fort de cette validation de base, le système a pu être efficacement miniaturisé. L'architecture matérielle retenue pour nos tests de bout en bout les plus récents repose ainsi exclusivement sur des plateformes ARM : une Raspberry Pi 4B en émission (TX) et une \textit{Compute Module 4} en réception (RX). L'analyse métrologique de cette chaîne, confirmée par un test de déclencheur physique (bouton partagé), prouve que le transport pur (Encodage matériel, transfert SPI, traitement MCU, temps de vol RF et décodage) s'effectue en \textbf{12 à 13 millisecondes}. La technologie Sub-1 GHz n'est donc en rien un frein à la réactivité requise pour le pilotage.
+
+\subsection{Objectifs pour la phase finale}
+Si le lien radio est pleinement validé, la latence "Glass-to-Glass" absolue mesurée actuellement se 
+situe entre \textbf{130 ms et 140 ms}. Ce décalage met en évidence une latence résiduelle importante 
+et confirme que les goulots d'étranglement des systèmes vidéo numériques résident désormais dans les 
+couches d'acquisition et de restitution.
+
+Les hypothèses principales pointent vers les files d'attente internes de l'Image Signal Processor (ISP) 
+de la caméra, ainsi que vers les tampons de reconstruction des trames réseau et la synchronisation 
+verticale inhérente aux pilotes d'affichage.
+
+Les semaines restantes avant le rendu final de ce travail de Bachelor seront consacrées à l'isolation 
+et à la caractérisation de ces variables. L'objectif sera de déterminer si des optimisations logicielles 
+de très bas niveau (contournement de l'ISP, affichage \textit{Bare-Metal} strict) permettront de gommer 
+ces 120 ms d'attente, rapprochant ainsi le système des standards de l'industrie FPV et validant 
+définitivement le potentiel du Wi-Fi HaLow pour l'exploration par drone en milieux confinés.
+
+a signé

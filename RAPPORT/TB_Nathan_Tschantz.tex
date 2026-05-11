@@ -11,6 +11,21 @@
 \usepackage{array}  
 \setlength{\parindent}{0pt}
 \usepackage{minted}
+\usepackage{amsmath}
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{gray!10},
+    frame=single,
+    breaklines=true,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{orange}
+}
+
 
 \usepackage{makeidx}
 \makeindex 
@@ -124,17 +139,30 @@
 % ============================================================== Contenu
 \include{feasibility_study}
 
-\section{Le protocole de transmission}
-Le codage H.264\index{H.264} est crucial pour réduire la latence\index{Latence} 
-du flux vidéo. Sur un drone FPV\index{FPV}, chaque milliseconde compte.
+\include{architecture}
 
-\subsection{Le capteur CMOS}
-Le capteur\index{Capteur!CMOS} convertit la lumière en signaux électriques.
+\include{environnement_dev}
 
-% ==============================================================
+\include{network_implementation}
+
+%\include{bilan_liaison} pas vraiment sur de la pértinence de ces calcules... pas asser baser sur des mesure
+
+\include{capture_and_video_traitement}
+
+\include{spi_interface}
+
+\include{iterations_and_mesures}
+
+%\include{mesure_material_latency}
+
+%\include{mesures_performances}
+
+% \include{iteration_openhd}
+
+
 \newpage
 \include{conclusion}
-
+% ==============================================================
 \newpage
 \section{Bibliographie}
 \nocite{*}

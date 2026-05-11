@@ -1,0 +1,84 @@
+\section{Architecture globale du système}
+
+Afin de répondre aux exigences très strictes de la transmission vidéo basse latence pour le pilotage 
+FPV\index{FPV}, le système a été divisé en trois entités matérielles distinctes : l'émetteur (destiné 
+à être embarqué sur le drone), le relais radio, et la station de réception au sol. 
+
+Cette segmentation architecturale offre un double avantage : elle permet de décharger le 
+microcontrôleur Wi-Fi des lourdes tâches d'encodage vidéo, et elle a rendu possible le profilage 
+et l'itération de chaque élément séparément tout au long de la phase de développement.
+
+% PLACEHOLDER POUR LE SCHEMA GLOBAL
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{imgs/complet_schematic.png}
+    \caption{Architecture globale précisée}
+    \label{fig:arch_globale}
+\end{figure}
+
+
+\subsection{L'émetteur embarqué (TX)}
+L'émetteur embarqué constitue le point de départ de la chaîne d'acquisition. Le module de traitement 
+vidéo n'a pas été figé immédiatement ; plusieurs ordinateurs ont été évalués successivement pour 
+isoler les variables de performance :
+\begin{itemize}
+    \item Une \textbf{Nvidia Jetson Nano 2GB}\index{Jetson Nano}, utilisée initialement pour exploiter 
+    son encodeur matériel intégré (NVENC) sur le flux brut du capteur CMOS. Le choix de cette plateforme 
+    particulièrement puissante visait à éliminer toute inconnue quant aux capacités d'encodage. 
+    En établissant une base de référence fiable avec un matériel surdimensionné, il a été 
+    possible de valider le pont de communication SPI et la liaison radio sans douter des 
+    performances de la source.
+    \item Des \textbf{Raspberry Pi 4}\index{Raspberry Pi} (une \textit{Compute Module 4 IO Board} 
+    puis une \textit{Raspberry Pi 4B} classique), testées dans un second temps pour évaluer des 
+    pipelines de capture vidéo alternatifs dans une démarche de \textit{downscaling}, une fois 
+    l'architecture réseau validée. De plus cela a permis d'utiliser les bibliothèques Raspberry 
+    natives à la caméra (raspberry camera module 2).
+\end{itemize}
+
+Indépendamment de l'ordinateur utilisé pour la compression (H.264 / H.265), les trames sont ensuite 
+systématiquement transmises via un bus SPI\index{SPI} cadencé à 5 MHz vers un microcontrôleur 
+\textbf{STM32U5}\index{STM32}. Ce MCU agit comme un pont réseau déterministe à ultra-haute vitesse. 
+Il encapsule les données vidéo brutes dans des paquets UDP à l'aide de la pile réseau LwIP\index{LwIP}, 
+avant de les expédier au module radio \textbf{Morse Micro MM8108 (EKH05)}\index{Wi-Fi HaLow!MM8108} 
+pour la transmission RF sur la bande Sub-1 GHz.
+
+\subsection{Le relais radio}
+Contrairement aux systèmes Wi-Fi traditionnels où le point d'accès traite intensivement les paquets, le 
+relais radio de notre architecture est conçu pour être le plus transparent possible et est resté constant 
+durant tout le projet.
+
+La réception des ondes HaLow est assurée par un routeur \textbf{GL.iNet MT3000} équipé d'une carte 
+d'évaluation \textbf{EKH19}\index{EKH19}. Ce routeur, fonctionnant sous le système d'exploitation 
+OpenWrt\index{OpenWrt}, est configuré pour agir comme un simple pont logiciel (\textit{Bridge}). 
+Il réceptionne les trames 802.11ah sur son interface sans-fil et les injecte directement sur son interface 
+Ethernet physique, limitant ainsi le temps de traitement logiciel par le CPU du routeur.
+
+\subsection{La station de réception au sol (RX)}
+La station au sol est le dernier maillon de la chaîne, responsable du décodage et de l'affichage. 
+L'objectif de ce projet étant d'observer et de maîtriser chaque source de latence, deux environnements 
+radicalement différents ont été employés :
+\begin{itemize}
+    \item \textbf{La station de diagnostic (PC Windows) :} Son utilisation a été temporaire 
+    et diagnostique. Afin de maintenir un environnement d'analyse logiciel constant, la réception et le 
+    décodage ont été réalisés via le framework \textbf{GStreamer}\index{GStreamer}. Des tests croisés 
+    ont été menés entre un ordinateur portable (Dell Latitude, écran 60 Hz et 165Hz) et une station fixe 
+    (NVIDIA RTX 4070 Ti Super, écran 165 Hz). L'unique but de cette plateforme était de prouver que le 
+    temps de traitement brut du processeur n'était pas le goulot d'étranglement de l'architecture. Une 
+    fois cette hypothèse écartée, l'environnement Windows a été abandonné au profit de Linux. Il est 
+    toutefois à noter que sur le plan de la latence, les mesures de latence "Glass-to-Glass" les 
+    plus faibles relevées sur cette plateforme ont logiquement été observées en utilisant l'écran 165 Hz.
+    \item \textbf{Les stations cibles (Raspberry Pi 4 - CM4 et 4B) :} Le passage définitif sur ces plateformes 
+    ARM s'inscrit dans une volonté d'utiliser un système d'exploitation Linux, offrant un meilleur contrôle 
+    sur le matériel. L'objectif était de s'affranchir des limitations et de l'overhead de windows. 
+    Ces plateformes ont permis d'évaluer et d'implémenter des pipelines logiciels 
+    GStreamer\index{GStreamer} également.
+\end{itemize}
+\newpage
+\subsection{Précision de la structure du document}
+Comme déterminé précédemment, voici l'ordre dans lequel ce rapport sera structuré de manière plus détaillé. 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb.png}
+    \caption{Flux logique du système : (1) Lien réseau Sub-1 GHz, (2) Capture vidéo, (3) Interfaçage SPI, (4) Plateformes de traitement TX et RX.}
+    \label{fig:complet_schematic_nb}
+\end{figure}

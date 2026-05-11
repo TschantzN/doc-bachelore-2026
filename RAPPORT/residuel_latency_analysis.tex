@@ -1,0 +1,28 @@
+\section{Analyse de la latence résiduelle et isolation des goulots d'étranglement}
+
+Suite à la mesure matérielle du pont de communication révélant un temps de transport radio de seulement $\sim$12.5 ms, un écart inexpliqué de plus de 100 millisecondes subsistait par rapport à la latence "Glass-to-Glass" perçue. Une démarche de diagnostic par élimination a donc été entreprise pour isoler la source de cette latence résiduelle.
+
+\subsection{Évaluation de la capture vidéo et abandon de la piste OpenHD}
+L'hypothèse initiale ciblait la pile logicielle de capture vidéo sous Linux (V4L2) comme principale source de délai. 
+Dans le milieu du drone FPV \textit{open-source}, des systèmes d'exploitation dédiés tels qu'OpenHD\index{OpenHD} sont souvent utilisés. Ils s'appuient sur l'API MMAL\index{MMAL} (sur l'architecture Raspberry Pi) pour court-circuiter les tampons standards du noyau et accélérer l'accès matériel au capteur.
+
+Le déploiement d'un tel système a été envisagé, nécessitant le passage de la Jetson Nano à une Raspberry Pi 4B côté émetteur. Toutefois, modifier et adapter un OS \textit{ad hoc} représentait un investissement en temps considérable. Avant d'engager cette lourde modification architecturale, un test d'isolement a été réalisé.
+
+\subsection{Le test de la boucle locale (\textit{Loopback})}
+Pour quantifier la latence réelle de la capture sous un OS standard, un test de boucle locale a été mis en place sur la Raspberry Pi 4B. L'objectif était de capturer le flux de la caméra CSI, de l'encoder et de l'afficher directement sur la sortie vidéo de la même carte, sans passer par le réseau.
+
+Les mesures visuelles de ce flux \textit{loopback} ont démontré un délai extrêmement faible, compris entre \textbf{5 et 7 millisecondes}. 
+
+Ce résultat empirique a été décisif : la capture matérielle et la pile logicielle standard de l'OS n'étaient en aucun cas le goulot d'étranglement. La piste d'un système personnalisé de type OpenHD a donc été pragmatiquement abandonnée, permettant de recentrer l'effort de recherche sur le reste de la chaîne.
+
+\subsection{Identification de la latence réseau et d'affichage}
+L'élimination de la capture (7 ms) et du transport radio (12.5 ms) permet d'affirmer que les $\sim$130 ms restants proviennent exclusivement de la station de réception. 
+
+L'analyse des paramètres logiciels met en évidence deux coupables principaux lors du décodage d'un flux UDP brut (sans protocole temps réel comme le RTP) :
+\begin{enumerate}
+    \item \textbf{Le Parseur H.264 (\texttt{h264parse}) :} En l'absence d'encapsulation réseau structurée, le parseur de GStreamer\index{GStreamer} doit analyser le flux octet par octet (\textit{byte-stream}). Pour valider l'intégrité d'une image, il est mécaniquement contraint d'attendre l'arrivée du premier octet de l'image suivante, générant un retard artificiel strict de l'ordre d'une trame entière (soit 16.6 ms à 60 FPS ou 33.3 ms à 30 FPS).
+    \item \textbf{La file d'attente réseau (\texttt{queue}) et la composition de l'OS :} Pour compenser la gigue (\textit{jitter}) inhérente aux réseaux sans fil, les éléments de réception incorporent des mémoires tampons (\textit{buffers}). Par ailleurs, le gestionnaire de fenêtres du système d'exploitation de la station de réception (Windows DWM ou X11/Wayland sous Linux) impose souvent un \textit{Triple Buffering} (synchronisation verticale) pour éviter les déchirements d'image (\textit{tearing}). Ce mécanisme stocke jusqu'à 3 images en file d'attente avant affichage, ajoutant mécaniquement entre 50 et 100 ms de latence incompressible sur des écrans classiques à 60 Hz.
+\end{enumerate}
+
+\subsection{Conclusion de l'analyse}
+Le système matériel embarqué et le pont de communication Wi-Fi HaLow ont été optimisés à leur maximum absolu. La latence résiduelle est le fruit des couches d'abstraction logiciel de la station de réception (OS, Buffers réseau, V-Sync). Bien que des optimisations logicielles extrêmes (affichage "Bare-Metal" intégral) soient possibles côté récepteur, la preuve de concept est validée : le réseau Sub-1 GHz n'est pas le facteur limitant pour du streaming FPV.
