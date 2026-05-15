@@ -35,9 +35,22 @@ uint32_t time_us = mcu_cycles / freq_mhz;
 \end{lstlisting}
 
 L'extraction de cette métrique a révélé un temps de traitement MCU ultra-court de 
-\textbf{0.8 ms par paquet}. Le temps total d'émission d'une image (encodage + 2 paquets de 1400 octets 
-transférés à 5 MHz) s'élève théoriquement à :
-$$Latence_{TX} = 1.2 + \left( 2 \times (2.24 + 0.8) \right) = \mathbf{7.28\text{ ms}}$$
+\textbf{0.8 ms par paquet}.
+
+\subsubsection{Bilan de la latence d'émission par image}
+À la suite de l'optimisation du débit à \textbf{400 kbps} pour une fréquence de \textbf{60 FPS}, le 
+poids moyen d'une image compressée a été réduit à environ \textbf{833 octets}. Cette valeur étant 
+inférieure à la capacité maximale de nos paquets (MTU de 1400 octets), une trame vidéo complète est 
+désormais transmise dans \textbf{un seul et unique paquet} SPI et UDP.
+
+Le temps total d'émission d'une image est donc simplifié, puisqu'il n'y a plus de sérialisation de 
+multiples paquets :
+$$Latence_{TX} = T_{Encodeur} + (1 \times (T_{SPI} + T_{MCU}))$$
+$$Latence_{TX} = 1.2\text{ ms} + (2.24\text{ ms} + 0.8\text{ ms}) = \mathbf{4.24\text{ ms}}$$
+
+Ce résultat de \textbf{4.24 ms} représente la limite physique d'émission de notre architecture matérielle 
+actuelle. Il confirme que la transmission radio elle-même est éxtrêmement rapide, laissant la majeure 
+partie du budget de latence disponible pour les processus d'acquisition.
 
 \subsection{Caractérisation physique du transport radio}
 Pour confronter cette théorie à la réalité et isoler la latence de transmission pure, une architecture de 
@@ -99,26 +112,52 @@ précise des temps de traitement de chaque maillon de la chaîne, indépendammen
 
 \begin{itemize}
     \item \textbf{Encodage matériel (Jetson / RPi) :} Les outils de traçage estiment l'encodage H.264 d'une 
-    trame à environ \textbf{2 ms}.
+    trame à environ \textbf{1.2 ms} sur Jetson, et \textbf{2 ms} sur Raspberry Pi.
     \item \textbf{Transfert SPI :} Le transfert d'un paquet de 1400 octets à 5 MHz requiert environ 
-    \textbf{2.2 ms}.
+    \textbf{2.24 ms}.
     \item \textbf{Traitement MCU (STM32) :} Le temps d'encapsulation LwIP, mesuré au cycle d'horloge, est de \textbf{0.8 à 1 ms}.
-    \item \textbf{Temps de vol radio (Air time) :} Après la désactivation des modes d'économie d'énergie (\textit{Power Saving Mode}) sur le module EKH19, qui induisaient artificiellement une latence de 22 ms, le temps de réponse réseau pur (Ping) entre le PC de réception et le relais s'est stabilisé entre \textbf{3 et 5 ms}.
-    \item \textbf{Décodage matériel (RX) :} Les temps de décodage sont très similaires d'une plateforme à l'autre : entre \textbf{0.5 et 1 ms} sur le GPU du PC portable, et environ \textbf{2 à 3 ms} sur la Raspberry Pi 4.
+    \item \textbf{Temps de vol radio (Air time) :} Après la désactivation des modes d'économie d'énergie 
+    (\textit{Power Saving Mode}) sur le module EKH19, qui induisaient artificiellement une latence de 22 ms, 
+    le temps de réponse réseau pur (Ping) entre le PC de réception et le relais s'est stabilisé entre 
+    \textbf{3 et 5 ms}.
+    \item \textbf{Décodage matériel (RX) :} Les temps de décodage sont très similaires d'une plateforme 
+    à l'autre : entre \textbf{0.5 et 1 ms} sur le GPU du PC portable, et environ \textbf{2 à 3 ms} sur 
+    la Raspberry Pi 4.
 \end{itemize}
 
-Ce bilan théorique (Encodage + SPI + MCU + Air time + Décodage) donne une somme d'environ \textbf{10 à 13 ms}. Ce résultat mathématique corrobore parfaitement la mesure physique de \textbf{12.47 ms} obtenue lors du test en rafale avec le déclencheur matériel (bouton partagé entre les deux RPi). De même, le test de boucle locale (capture et affichage sur la même carte) mesuré entre 5 et 7 ms valide notre estimation de 2 ms d'encodage et 3 ms de décodage couplés à un très léger \textit{overhead} de l'OS.
+Ce bilan théorique (Encodage + SPI + MCU + Air time + Décodage) donne une somme d'environ \textbf{8 à 10 ms} :
+$$1.2\text{ (Enc.)} + 2.24\text{ (SPI)} + 0.8\text{ (MCU)} + 3.0\text{ (Air)} + 1.0\text{ (Dec.)} = \mathbf{8.24\text{ ms}}$$
+
+Ce résultat mathématique est cohérent avec la mesure physique de \textbf{12.47 ms} obtenue lors du test en 
+rafale avec le déclencheur matériel (bouton partagé entre les deux RPi). La différence d'environ 4 
+millisecondes s'explique par les différents \textit{overhead} logiciel, notament du noyau Linux 
+(gestion de la file d'attente réseau et ordonnancement de l'OS) qui n'est pas pris en compte dans le 
+calcul matériel pur. De même, le test de boucle locale (capture et affichage sur la même carte) 
+mesuré entre 5 et 7 ms valide notre estimation d'encodage et de décodage couplés à ce même
+\textit{overhead} de l'OS.
 
 \subsection{Bilan "Glass-to-Glass" et perspectives (Rendu intermédiaire)}
-Malgré la rapidité démontrée du pont réseau Sub-1 GHz, la latence "Glass-to-Glass" absolue (le délai entre un événement réel et son affichage sur l'écran du pilote) mesurée lors de nos derniers essais se situe entre \textbf{130 ms et 140 ms} (sur une architecture combinant RPi 4B et RPi Compute Module).
+Malgré la rapidité démontrée du pont réseau Sub-1 GHz, la latence "Glass-to-Glass" absolue (le délai entre 
+un événement réel et son affichage sur l'écran du pilote) mesurée lors de nos derniers essais se situe 
+entre \textbf{130 ms et 140 ms} (sur une architecture combinant RPi 4B et RPi Compute Module).
 
-Ce décalage met en évidence une latence inexpliquée d'environ 120 ms. Dans le cadre de ce rendu intermédiaire, la source exacte de cette latence résiduelle reste à identifier avec certitude. 
+Ce décalage met en évidence une latence inexpliquée d'environ 120 ms. Dans le cadre de ce rendu intermédiaire, 
+la source exacte de cette latence résiduelle reste à identifier avec certitude. 
 
 Plusieurs hypothèses guideront la suite de ce travail de Bachelor :
 \begin{enumerate}
-    \item \textbf{Goulot d'étranglement sous charge (MCU) :} Une hypothèse supposait qu'un bombardement massif de paquets vidéo ralentissait le STM32 par rapport à un simple test de ping. Cependant, si le traitement MCU était le goulot d'étranglement, les mémoires tampons déborderaient et la latence s'accumulerait indéfiniment au fil du temps. L'image restant stable, cette piste semble peu probable.
-    \item \textbf{Le pipeline d'acquisition (ISP) :} Comme mentionné précédemment, les files d'attente internes de l'Image Signal Processor de la caméra pour l'exposition automatique pourraient être responsables d'une grande partie de ce délai incompressible avant même que l'image n'atteigne l'encodeur.
-    \item \textbf{L'encapsulation logicielle et l'affichage (RX) :} Bien que le test du bouton ait validé la pile réseau bas niveau du récepteur, l'empilement logiciel GStreamer (\texttt{h264parse}) et la synchronisation verticale des écrans de restitution restent des sources potentielles de rétention d'image.
+    \item \textbf{Goulot d'étranglement sous charge (MCU) :} Une hypothèse supposait qu'un bombardement 
+    massif de paquets vidéo ralentissait le STM32 par rapport à un simple test de ping. Cependant, si le 
+    traitement MCU était le goulot d'étranglement, les mémoires tampons déborderaient et la latence 
+    s'accumulerait indéfiniment au fil du temps. L'image restant stable, cette piste semble peu probable.
+    \item \textbf{Le pipeline d'acquisition (ISP) :} Comme mentionné précédemment, les files d'attente 
+    internes de l'Image Signal Processor de la caméra pour l'exposition automatique pourraient être 
+    responsables d'une grande partie de ce délai incompressible avant même que l'image n'atteigne l'encodeur.
+    \item \textbf{L'encapsulation logicielle et l'affichage (RX) :} Bien que le test du bouton ait validé 
+    la pile réseau bas niveau du récepteur, l'empilement logiciel GStreamer (\texttt{h264parse}) et la 
+    synchronisation verticale des écrans de restitution restent des sources potentielles de rétention d'image.
 \end{enumerate}
 
-La suite de ce projet se concentrera sur l'isolation stricte de ces dernières variables, afin de cerner l'origine de ces 120 millisecondes et de déterminer les optimisations ultimes possibles pour rapprocher ce système des standards de l'industrie FPV.
+La suite de ce projet se concentrera sur l'isolation stricte de ces dernières variables, afin de cerner 
+l'origine de ces 120 millisecondes et de déterminer les optimisations ultimes possibles pour rapprocher 
+ce système des standards de l'industrie FPV.

@@ -29,6 +29,20 @@ struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, 1400, PBUF_REF);
 Cette valeur approche la taille maximale d'une trame Ethernet standard (MTU), ce qui minimise le ratio 
 d'en-têtes (Overhead MAC+IP+UDP) par rapport aux données utiles.
 
+\subsection{Optimisation de la réactivité radio : Désactivation du PSM}
+Par défaut, les modules Wi-Fi HaLow Morse Micro intègrent des mécanismes de gestion de l'énergie 
+(\textit{Power Saving Mode}) destinés aux capteurs IoT sur batterie. Ce mode place la radio en 
+veille entre les transmissions, ce qui induisait dans nos tests une latence systématique de environ 
+\textbf{22 ms} par paquet.
+
+Pour un usage FPV, cette économie d'énergie n'est pas accéptable. Le mode veille a été explicitement désactivé 
+dans le firmware du STM32 via l'appel suivant :
+\begin{lstlisting}[language=C]
+mmwlan_set_power_save_mode(MMWLAN_PS_DISABLED);
+\end{lstlisting}
+Cette modification a permis de stabiliser le temps de réponse réseau (\textit{ping}) entre \textbf{3 et 5 ms}, 
+garantissant une gigue minimale.
+
 \subsection{Contournement des contraintes réglementaires (ETSI vs FCC)}
 Lors des premiers essais d'établissement de la liaison radio en MCS 1, une latence de base colossale 
 d'environ 670 ms a été observée sur de simples paquets de test (Ping). 
@@ -73,22 +87,51 @@ routeur et d'être répliqué directement sur le câble Ethernet(pour autant que
 connectée soit sur le bon sous réseau) sans être intercepté ni traité par la pile 
 TCP/IP ou des utilitaires logiciels, économisant ainsi 10 à 20 ms de délai de traitement additionnel.
 
-\subsection{Validation de la bande passante vidéo}
-La désactivation de l'adaptation automatique de débit (\textit{Rate Control}) a été effectuée dans le SDK 
-via la fonction ATE (Automatic Test Equipement, fonction utilisé en interne pour vérifer le fonctionnement
-de certaine fonctionnalité durant les phases de tests) :
+\subsection{Validation empirique et mathématique de la bande passante vidéo}
+La désactivation de l'adaptation automatique de débit (\textit{Rate Control}) a été effectuée dans le 
+SDK via la fonction ATE (\textit{Automated Test Equipment}, fonction utilisée en interne pour forcer 
+des configurations matérielles spécifiques lors des phases de tests) :
 \begin{lstlisting}[language=C]
 mmwlan_ate_override_rate_control(MMWLAN_MCS_2, MMWLAN_BW_2MHZ, MMWLAN_GI_NONE);
 \end{lstlisting}
 
-En forçant l'utilisation du \textbf{MCS 2} sur une largeur de bande de \textbf{2 MHz}, la modulation employée 
-(QPSK) garantit une excellente robustesse face aux obstacles physiques. Des mesures empiriques (par capture 
-\texttt{tcpdump}) ont validé un débit utile stable d'environ \textbf{1.34 Mbps} (120 paquets de 1400 octets 
-par seconde).
+En forçant l'utilisation du \textbf{MCS 2} sur une largeur de bande de \textbf{2 MHz}, la modulation 
+employée (QPSK) garantit une excellente robustesse face aux obstacles physiques. Des mesures empiriques 
+(par capture \texttt{tcpdump}) ont validé un débit utile réseau stable d'environ \textbf{1.34 Mbps} 
+(soit une moyenne de 120 paquets de 1400 octets par seconde).
 
-Mathématiquement, un flux vidéo brut en résolution 480p (854x480) à 24 images par seconde (codé en 24 bits par pixel) 
-requiert un débit d'environ 236 Mbps. En appliquant une norme de compression vidéo moderne (H.264 / H.265) 
-configurée pour le streaming en temps réel, il est possible de forcer l'encodage vidéo à respecter un 
-certain débit (\textit{Bitrate}). Dans notre cas, les tests montreront par la suite que le taux de compression 
-offrant le meilleur compromis, évitant au maximum les engorgements et les ralentissements, se situe 
-autour de \textbf{400 kbps}.
+Il est ensuite nécessaire de confronter cette capacité physique aux exigences du flux vidéo. Le débit brut 
+(non compressé) se calcule ainsi :
+$$D_{brut} = W \times H \times F \times B_{pp}$$
+
+Afin de contourner la rétention d'image du processeur de signal (ISP) de la caméra, la fréquence 
+d'échantillonnage a dû être fixée à 60 FPS. Pour le flux vidéo retenu en résolution 480p 
+(soit $720 \times 480$ pixels), capturé à 60 images par seconde et codé sur 24 bits de couleurs :
+$$D_{brut\_480p60} = 720 \times 480 \times 60 \times 24 = 497\,664\,000 \text{ bps}$$
+Soit environ 497.6 Mbps.
+
+Un encodeur matériel moderne (H.264 / H.265), configuré pour du streaming en temps réel, offre un ratio de 
+compression effectif standard avoisinant 1:200. Le débit réseau théorique requis deviendrait alors :
+$$D_{cible} = \frac{D_{brut}}{C_{ratio}}$$
+$$D_{cible\_480p60} = \frac{497.6 \text{ Mbps}}{200} \approx 2.49 \text{ Mbps}$$
+
+Cette modélisation démontre clairement qu'à 60 images par seconde, même une résolution modeste de 480p avec 
+une compression standard exigerait environ 2.49 Mbps, ce qui saturerait immédiatement le canal radio imposé 
+par le MCS 2 (limité empiriquement à 1.34 Mbps).
+
+C'est pour cette raison critique que l'encodeur matériel doit être paramétré de manière drastique. Afin de 
+forcer ce flux à traverser la liaison radio tout en conservant une marge de sécurité vitale face aux baisses 
+imprévisibles de la qualité du lien RF en condition de vol NLOS, le taux de compression final de l'encodeur 
+a été bridé de manière stricte (CBR - \textit{Constant Bit Rate}) à \textbf{400 kbps}. 
+
+\subsubsection{Impact de la compression sur la fragmentation des paquets}
+Ce compromis de 400 kbps impose à l'encodeur un ratio de compression extrême (environ 1:1240) au détriment 
+de la fidélité visuelle, mais garantit un avantage décisif sur la latence matérielle. En lissant ce débit 
+sur la fréquence d'échantillonnage, le poids moyen d'une image vidéo compressée se calcule ainsi :
+$$Taille_{image} = \frac{400\,000 \text{ bits/s}}{60 \text{ FPS} \times 8 \text{ bits}} \approx 833 \text{ octets}$$
+
+Sachant que la charge utile maximale (MTU) définie pour nos trames UDP et nos transferts SPI est de 
+\textbf{1400 octets}, l'écrasante majorité des images générées par l'encodeur tiennent dans 
+\textbf{un seul et unique paquet réseau}. Cette caractéristique est fondamentale pour la basse latence : 
+elle évite la fragmentation IP et exempte le récepteur de devoir stocker et attendre de multiples paquets 
+pour reconstruire et décoder une seule trame vidéo.

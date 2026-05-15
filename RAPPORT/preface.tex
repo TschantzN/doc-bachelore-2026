@@ -33,8 +33,19 @@ vidéo basse latence, les concepts et acronymes suivants seront couramment utili
     les retransmissions. Ce projet modifie directement ces couches pour les adapter au flux vidéo.
     
     \item[RTOS (\textit{Real-Time Operating System}) :] Système d'exploitation temps réel (comme FreeRTOS, utilisé sur 
-    le module de réception). Contrairement à un OS classique (comme Linux), un RTOS garantit l'exécution des tâches dans 
-    des délais stricts et déterministes, minimisant ainsi la latence logicielle (gigue) lors de l'affichage de la vidéo.
+    le microcontrôleur d'émission STM32). Contrairement à un OS classique (comme Linux), un RTOS garantit l'exécution des tâches dans 
+    des délais stricts et déterministes, minimisant ainsi la gigue logicielle lors du routage des données.
+
+    \item[Latence "Glass-to-Glass" :] Délai total mesuré entre l'instant où un événement physique se produit devant l'objectif 
+    de la caméra (le premier "verre") et le moment où il est affiché sur l'écran du pilote (le second "verre"). C'est la métrique 
+    de performance absolue de ce projet, englobant tous les temps de traitement matériels et logiciels.
+
+    \item[UDP Broadcast \& No-ACK :] Stratégie de transmission réseau consistant à diffuser des paquets de données à l'aveugle à tous 
+    les équipements du sous-réseau, sans demander d'accusé de réception (\textit{No-ACK}). Cette méthode sacrifie la garantie absolue de 
+    livraison au profit d'un flux continu à latence minimale.
+
+    \item[Gigue (\textit{Jitter}) :] Variation temporelle de la latence. Dans un flux vidéo en temps réel, une forte gigue (des paquets arrivant 
+    en rafales irrégulières) provoque des saccades visuelles souvent plus perturbantes pour le pilotage qu'une latence fixe et stable.
 \end{description}
 
 \vspace{1cm}

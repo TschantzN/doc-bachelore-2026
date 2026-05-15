@@ -1,1 +1,42 @@
-\section{Glossaire}
+\section*{Glossaire}
+\addcontentsline{toc}{section}{Glossaire}
+
+\begin{description}
+    \item[Couche MAC :] (\textit{Media Access Control}) Sous-couche du modèle réseau OSI chargée de contrôler l'accès physique au support de transmission (l'air, dans notre cas) et de gérer les acquittements.
+    
+    \item[DWT :] (\textit{Data Watchpoint and Trace}) Composant matériel intégré aux processeurs ARM Cortex-M permettant, entre autres, de compter les cycles d'horloge du cœur pour un profilage temporel avec une précision de l'ordre de la nanoseconde.
+    
+    \item[EKH05 / EKH19 :] Cartes d'évaluation (\textit{Evaluation Kits}) développées par Morse Micro intégrant les puces Wi-Fi HaLow MM8108. L'EKH05 dispose d'entrées/sorties matérielles étendues (bus SPI, GPIO) pour l'IoT, tandis que l'EKH19 est conçue pour un interfaçage réseau standard (USB ou routeur).
+    
+    \item[FreeRTOS :] Système d'exploitation temps réel (RTOS) open-source pour microcontrôleurs, garantissant l'exécution de tâches avec des délais de traitement déterministes.
+    
+    \item[GPIO :] (\textit{General Purpose Input/Output}) Broche physique d'un microcontrôleur pouvant être configurée par logiciel comme entrée ou sortie numérique (utilisée dans ce projet pour le signal de \textit{Handshake}).
+    
+    \item[GStreamer :] Framework multimédia open-source reposant sur une architecture de graphes (pipelines). Il permet de chaîner des éléments logiciels pour capturer, encoder, transmettre et décoder de la vidéo avec une latence minimale.
+    
+    \item[Jetson Nano :] Nano-ordinateur développé par Nvidia, équipé d'un processeur ARM et d'un processeur graphique (GPU) intégré, particulièrement optimisé pour l'accélération matérielle de l'encodage vidéo (NVENC).
+    
+    \item[LDPC :] (\textit{Low-Density Parity-Check}) Algorithme mathématique très performant de correction d'erreurs (FEC), permettant de reconstruire des paquets radio corrompus sans avoir besoin de les retransmettre.
+    
+    \item[LwIP :] (\textit{Lightweight IP}) Pile réseau TCP/IP open-source, hautement optimisée pour les systèmes embarqués (microcontrôleurs) disposant de très peu de mémoire vive (RAM).
+    
+    \item[MM8108 :] Puce SoC (\textit{System on a Chip}) développée par Morse Micro. C'est le composant électronique au cœur de ce projet, chargé de la modulation et de l'émission des ondes Wi-Fi HaLow.
+    
+    \item[OpenHD :] Système d'exploitation open-source basé sur Linux, conçu par la communauté FPV pour transmettre de la vidéo numérique longue portée en détournant des puces Wi-Fi standards (2.4 et 5.8 GHz).
+    
+    \item[OpenOCD :] (\textit{Open On-Chip Debugger}) Logiciel libre agissant comme un serveur de débogage. Il permet de programmer et d'inspecter la mémoire d'un microcontrôleur depuis un PC via une interface matérielle.
+    
+    \item[OpenWrt :] Distribution Linux open-source extrêmement légère, conçue pour remplacer les microprogrammes (\textit{firmwares}) des routeurs réseau, offrant un contrôle bas niveau sur les interfaces de routage.
+    
+    \item[Raspberry Pi :] Gamme de nano-ordinateurs monocartes très populaires tournant sous Linux. La version \textit{Compute Module 4 (CM4)} est une déclinaison miniaturisée sans connecteurs, destinée à l'intégration dans des systèmes industriels ou embarqués.
+    
+    \item[SPI :] (\textit{Serial Peripheral Interface}) Bus de communication matériel synchrone fonctionnant en mode Maître/Esclave. Utilisé ici pour le transfert à très haute vitesse du flux vidéo compressé entre Linux et le microcontrôleur.
+    
+    \item[ST-LINK :] Sonde de débogage matérielle développée par STMicroelectronics, permettant à un ordinateur de flasher du code et de contrôler un microcontrôleur STM32.
+    
+    \item[STM32 :] Famille de microcontrôleurs 32 bits basés sur l'architecture ARM Cortex-M, développée par STMicroelectronics.
+    
+    \item[STM32CubeIDE :] Environnement de développement intégré (IDE) officiel de STMicroelectronics, basé sur Eclipse, utilisé pour écrire, compiler et déboguer le code C du projet embarqué.
+    
+    \item[Tcpdump :] Outil d'analyse réseau en ligne de commande permettant de capturer et d'inspecter les paquets de données (trames) transitant sur une interface réseau matérielle (Wi-Fi ou Ethernet).
+\end{description}

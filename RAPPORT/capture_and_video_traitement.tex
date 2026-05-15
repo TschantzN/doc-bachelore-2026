@@ -4,13 +4,29 @@ Une fois le pont réseau Sub-1 GHz établi, le défi consiste à formater la sou
 traverser ce canal étroit sans générer de goulots d'étranglement. Cette section détaille les choix 
 logiciels, l'optimisation des paramètres de compression, et la gestion des tampons matériels.
 
+
+\subsection{Arbitrage entre les normes H.264 et H.265}
+Le choix initial du projet s'était porté sur la norme \textbf{H.265 (HEVC)}. Successeur du H.264, elle 
+offre une efficacité de compression supérieure de 50\%, permettant de maintenir une image nette même à 
+des débits très faibles (400 kbps). Cependant, cette complexité algorithmique exige des ressources de 
+décodage importantes.
+
+Lors des phases de tests sur la station de réception finale (Raspberry Pi 4), l'absence d'un pilote de 
+décodage matériel H.265 stable et performant sous Linux (\texttt{v4l2h265dec}) a provoqué une latence 
+très élevé, dépassant les 300 ms. 
+
+Le système a donc été \textit{downgradé} vers la norme \textbf{H.264 (AVC)}. Bien que moins performante 
+en termes de ratio qualité/débit, elle bénéficie d'un support matériel universel. Ce choix a permis
+d'exploiter un décodage extrêmement rapide sur Raspberry Pi, ramenant la latence de traitement au niveau 
+de la milliseconde tout en conservant une fluidité d'image compatible avec le pilotage FPV.
+
 \subsection{Le framework GStreamer et l'optimisation H.264}
 Pour gérer l'acquisition, la compression et l'encapsulation de la vidéo, le framework \textit{open-source} 
 GStreamer\index{GStreamer} a été retenu de bout en bout. Son architecture modulaire permet de relier 
 directement la sortie d'un capteur matériel à un encodeur, en minimisant les copies en mémoire vive 
 (\textit{Zero-Copy}).
 
-La compression du flux exploite la norme H.264. La configuration a été pensée pour prioriser la vitesse 
+La compression du flux exploite donc la norme H.264. La configuration a été pensée pour prioriser la vitesse 
 au détriment de l'efficacité de compression absolue. Trois paramètres critiques ont été forcés :
 \begin{itemize}
     \item \textbf{Le contrôle de débit strict (CBR - \texttt{control-rate=1}) :} Le débit est verrouillé 
@@ -21,6 +37,19 @@ au détriment de l'efficacité de compression absolue. Trois paramètres critiqu
     \item \textbf{L'espacement des images clés (\texttt{idrinterval=1000}) :} L'envoi d'images clés 
     (I-Frames), très volumineuses, est espacé au maximum. Limiter leur fréquence évite les rafales 
     massives de paquets (\textit{bursts}) qui saturent la radio.
+\end{itemize}
+\subsubsection{Précisions sur les paramètres de pipeline}
+Certains drapeaux (\textit{flags}) spécifiques ont été ajoutés pour forcer le comportement temps réel de 
+la chaîne :
+\begin{itemize}
+    \item \textbf{\texttt{disable-passthrough=true} :} Par défaut, un parseur peut laisser passer les 
+    données sans les traiter si le format semble correct. Ce flag force l'élément \texttt{h264parse} à 
+    analyser activement chaque octet du flux pour reconstruire proprement les unités de décodage 
+    (NAL units). Cela garantit que le décodeur reçoit des trames parfaitement alignées, évitant 
+    toute attente inutile.
+    \item \textbf{\texttt{config-interval=-1} :} Force l'envoi des informations de configuration (SPS/PPS)
+     à chaque image clé, permettant au récepteur de reprendre le flux instantanément même en cas de perte 
+     de connexion temporaire.
 \end{itemize}
 
 \subsection{Pipelines d'émission (TX)}
@@ -63,11 +92,11 @@ kmssink sync=false max-lateness=0
 
 \subsection{Identification et contournement de la latence de l'ISP}
 Malgré ces optimisations, une latence visuelle globale persistait lors des premiers tests. L'analyse 
-différentielle a prouvé qu'au moins une partie que la latence "fantôme" provenait de l'Image Signal 
+différentielle a prouvé qu'au moins une partie de la latence "fantôme" provenait de l'Image Signal 
 Processor (ISP) matériel de la caméra.
 
 Pour effectuer les calculs d'exposition automatique (AE) et de balance des blancs (AWB), l'ISP conserve 
-systématiquement un certain nombre d'image brutes dans une file d'attente avant de les transmettre à 
+systématiquement un certain nombre d'images brutes dans une file d'attente avant de les transmettre à 
 l'encodeur, nous ferons l'hypothèse qu'il en conserve 4. Mathématiquement, pour un capteur configuré pour 
 échantillonner à 24 images par seconde, la durée d'une image est de $41.6\text{ ms}$. 
 Le délai induit par les 4 buffers logiciels est donc de :

@@ -31,14 +31,30 @@ pilotage.
 
 \subsection{Objectifs du travail de Bachelor}
 L'objectif principal de ce projet est d'étudier, de concevoir et de valider de bout en bout un prototype 
-de transmission vidéo exploitant les avantages physiques du Wi-Fi HaLow. 
+de transmission vidéo exploitant les avantages physiques de la norme IEEE 802.11ah (Wi-Fi HaLow). 
 
-Plutôt que de se limiter à la simple configuration logicielle de modules radio, l'enjeu s'est révélé 
-être une véritable optimisation du système dans son ensemble. Cela implique le contournement des 
-mécanismes d'acquittement réseau (diffusion unidirectionnelle), le réglage des pipelines de compression 
-vidéo matérielle, ainsi que la mise en place d'une synchronisation physique stricte entre les 
-différents processeurs et microcontrôleurs embarqués pour éviter l'accumulation de données dans les 
-mémoires tampons (\textit{buffers}).
+Plutôt que de se limiter à la simple configuration logicielle de modules radio, l'enjeu s'est révélé être 
+une véritable optimisation du système dans son ensemble. Cela implique le contournement des mécanismes 
+d'acquittement réseau (diffusion unidirectionnelle), le réglage strict des pipelines de compression vidéo 
+matérielle, ainsi que la mise en place d'une synchronisation physique entre les différents processeurs 
+et microcontrôleurs embarqués pour éviter l'accumulation de données dans les mémoires tampons 
+(\textit{buffers}).
+
+\subsubsection{Définition du seuil d'acceptabilité et cas d'usage}
+Au-delà de l'optimisation technique de la chaîne, il convient de définir un objectif de latence global 
+pragmatique, aligné avec les contraintes physiques du vol en immersion. Sur une machine de type 
+"freestyle" ou de course, les systèmes de transmission numériques traditionnels (opérant en 5.8 GHz) 
+ciblent une latence de 20 à 30 ms (voire inférieure) pour autoriser des manœuvres très agressives.
+
+Toutefois, l'objectif de ce travail n'est pas de concurrencer ces systèmes sur la vitesse pure, mais de 
+privilégier la robustesse et la pénétration de signal en milieu complexe (conditions NLOS telles que 
+l'exploration de bâtiments isolés, de forêts denses ou de tunnels). Dans ce contexte d'exploration, une 
+absence de perte de liaison est préférable à une latence absolue minimale. 
+
+Le pilotage reste parfaitement viable et sécurisant jusqu'à un seuil de latence d'environ 80 ms. 
+L'objectif de ce système, une fois toutes les optimisations matérielles et logicielles appliquées, 
+est donc d'atteindre ce seuil des 80 ms, qui représente une limite physique raisonnable au vu de la
+chaîne d'acquisition matérielle grand public exploitée dans ce projet.
 
 \subsection{Structure du document}
 Ce rapport s'articule autour d'une progression logique, allant de la mise en place des fondations 

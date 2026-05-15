@@ -1,1 +1,107 @@
-\section{Annexes}
+\appendix
+
+\section{Guide de connexion et d'accès aux équipements}
+\label{annexe:connexion}
+
+Durant la phase de développement, le système étant distribué sur plusieurs plateformes matérielles dépourvues d'écran 
+(architecture \textit{headless}), des méthodes de connexion spécifiques ont été mises en place pour interagir avec chaque équipement.
+
+\subsection{Accès au microcontrôleur d'émission (STM32 / EKH05)}
+Le module Morse Micro EKH05 intègre un débogueur ST-LINK natif. La connexion physique s'effectue via un simple câble micro-USB relié 
+à la station de développement (PC Windows). 
+Cette liaison fournit deux interfaces virtuelles simultanées :
+\begin{itemize}
+    \item \textbf{Le flashage et débogage (SWD) :} Géré de manière transparente par STM32CubeIDE via le serveur OpenOCD.
+    \item \textbf{La console de logs (UART) :} Accessible via un émulateur de terminal série (tel que PuTTY). Les paramètres 
+    de connexion au port COM virtuel sont systématiquement : \texttt{Baudrate 115200, 8 bits de données, 1 bit d'arrêt, aucune parité}.
+\end{itemize}
+Du point de vue du réseau HaLow, le STM32 possède l'adresse IP source \texttt{192.168.12.2}.
+
+\subsection{Accès aux nano-ordinateurs de capture (Jetson Nano / RPi 4B)}
+Pour modifier les scripts de capture vidéo et lancer les pipelines GStreamer sans alourdir le processeur avec une interface 
+graphique, les cartes d'acquisition ont été configurées pour un accès distant via SSH (\textit{Secure Shell}).
+
+\begin{description}
+    \item[Via point d'accès mobile ou réseau local :] La connexion s'effectue depuis le PC de développement. Par exemple, 
+    pour la Jetson connectée sur un réseau partagé : \\
+    \texttt{ssh jetsontb@10.120.243.168}
+    \item[Via câble Ethernet direct :] En cas de déploiement en extérieur (sans réseau local), la carte est configurée 
+    avec une adresse IP statique de repli sur son port Ethernet pour la prise en main.
+\end{description}
+
+\subsection{Accès au routeur relais de réception (GL.iNet MT3000 / OpenWrt)}
+Le routeur OpenWrt faisant office de pont réseau (Bridge) est le centre névralgique de la réception au sol. Son adresse 
+IP sur l'interface sans-fil est \texttt{192.168.12.1}. Son administration s'effectue exclusivement via son interface 
+Ethernet (LAN), qui a été isolée pour éviter tout conflit de routage.
+
+\begin{itemize}
+    \item \textbf{Interface Web (LuCI) :} Accessible depuis un navigateur web à l'adresse \texttt{http://192.168.13.1}. 
+    Elle permet de configurer le mode moniteur ou les paramètres de l'AP sans chiffrement.
+    \item \textbf{Accès SSH (Ligne de commande) :} Indispensable pour injecter le module noyau (\texttt{morse.ko}) 
+    et créer le pont logiciel (\texttt{brctl addif br-ahwlan wlan0}). La connexion s'effectue via : \\
+    \texttt{ssh root@192.168.13.1}
+\end{itemize}
+
+\subsection{Accès et adressage des stations de réception (RX)}
+Pour éviter les conflits de routage avec le système d'exploitation de la station de réception, le réseau FPV est strictement 
+isolé sur le sous-réseau \texttt{192.168.12.x}, sans passerelle par défaut (aucun accès Internet croisé). L'adresse de diffusion 
+(\textit{Broadcast}) ciblée par l'émetteur est \texttt{192.168.12.255}.
+
+\begin{description}
+    \item[Station de diagnostic (PC Windows) :] L'interface réseau Ethernet doit être fixée manuellement sur l'adresse 
+    \texttt{192.168.12.10} (Masque : \texttt{255.255.255.0}, Passerelle : Vide (ou  192.168.12.1)).
+    \item[Station cible (RPi Compute Module / RPi 4B) :] Lors de la réception "Bare-Metal" sous Linux, l'interface Ethernet 
+    nécessite également d'être forcée manuellement sur une adresse statique pour recevoir le flux ponté par le routeur : \\
+    \texttt{IP : 192.168.12.50}
+\end{description}
+
+\subsection{Tableau récapitulatif d'adressage et d'accès}
+
+Le tableau \ref{tab:recap_ip} résume l'ensemble du plan d'adressage et des interfaces de gestion de l'architecture déployée :
+
+\begin{table}[htbp]
+    \centering
+    \renewcommand{\arraystretch}{1.4} % Aère les lignes du tableau
+    \begin{tabular}{|p{4.5cm}|p{3.5cm}|p{3cm}|p{4.5cm}|}
+        \hline
+        \textbf{Équipement / Rôle} & \textbf{Interface d'accès} & \textbf{Adresse IP FPV} & \textbf{Remarques} \\
+        \hline
+        \hline
+        \textbf{STM32 / EKH05} \newline (Modem Émetteur) & USB (UART / SWD) & \texttt{192.168.12.2} & Target des trames 
+        SPI. Diffuse vers l'adresse \texttt{.255}. \\
+        \hline
+        \textbf{Jetson Nano / RPi 4B} \newline (Acquisition Vidéo TX) & SSH (Wi-Fi dev ou Ethernet direct) & \textit{Non applicable} &
+         Connecté en SPI au modem. Pas d'IP sur le réseau FPV. \\
+        \hline
+        \textbf{GL.iNet MT3000} \newline (Routeur Relais RX) & SSH / Web (LuCI) \newline via LAN & \texttt{192.168.12.1} \newline 
+        (Interface \texttt{ahwlan}) & IP d'administration LAN décalée sur \texttt{192.168.13.1} pour éviter les conflits. \\
+        \hline
+        \textbf{PC Windows} \newline (Station de diag. RX) & Accès local & \texttt{192.168.12.10} & Passerelle laissée vide. (ou  192.168.12.1) \\
+        \hline
+        \textbf{RPi Compute Module 4} \newline (Station cible RX) & SSH (Wi-Fi dev) & \texttt{192.168.12.50} & Fixée manuellement 
+        sur l'interface Ethernet (\texttt{eth0}). \\
+        \hline
+    \end{tabular}
+    \caption{Récapitulatif des accès et du plan d'adressage (Sous-réseau FPV : 192.168.12.x)}
+    \label{tab:recap_ip}
+\end{table}
+
+
+\section{Modifications du pilote Morse Micro}
+\label{annexe:patch_driver}
+Afin de forcer l'utilisation d'une modulation robuste (MCS 2) et l'activation du code correcteur d'erreurs (LDPC) 
+en dehors de l'interface standard d'OpenWrt, des modifications directes (Patching) ont été opérées sur le code 
+source C du module noyau (Kernel Driver) de la puce MM8108.
+
+Les modifications ont porté sur les fichiers sources lors de la cross-compilation du noyau Linux pour l'architecture 
+MediaTek Filogic :
+\begin{itemize}
+    \item \texttt{command.c} : Surcharge de la structure \texttt{morse\_cmd\_req\_set\_transmission\_rate} pour 
+    forcer les bits \texttt{req.use\_ldpc = 1} et injecter le \texttt{mcs\_index}.
+    \item \texttt{usb.c} : Injection de l'appel manuel \texttt{morse\_cmd\_set\_fixed\_transmission\_rate(mors, 1, 2, 0, 0)} 
+    directement dans la séquence d'initialisation \texttt{morse\_usb\_probe} au montage de l'interface.
+    %\item \texttt{mac.c} : Modification de la machine d'états \texttt{morse\_mac\_ops\_config} pour imposer la création 
+    %d'une interface \texttt{NL80211\_IFTYPE\_MONITOR} en ignorant les restrictions de sécurité par défaut.
+\end{itemize}
+L'ensemble de ces modifications a permis de compiler un module \texttt{morse.ko} personnalisé, assurant la stabilité de 
+la liaison unidirectionnelle nécessaire au transport UDP Broadcast.
