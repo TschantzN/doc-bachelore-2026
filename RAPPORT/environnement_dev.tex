@@ -1,6 +1,6 @@
 \section{Configuration de l'environnement de développement embarqué}
 
-Le développement du firmware pour le microcontrôleur gérant transmission (STM32) repose sur 
+Le développement du firmware pour le microcontrôleur gérant la transmission (STM32) repose sur 
 le kit de développement logiciel officiel de Morse Micro (\texttt{mm-iot-sdk}). Ce SDK étant 
 nativement conçu pour un environnement Linux avec platformio et des chaînes de cross compilation 
 préinstallées, son intégration sous Windows a nécessité plusieurs adaptations.
@@ -78,7 +78,7 @@ Le processus de flashage repose sur une architecture client-serveur :
 \subsubsection{Résolution du conflit de signature et de version matérielle}
 Lors des premiers déploiements, une erreur bloquait la communication SPI entre le MCU et la 
 puce Wi-Fi (\texttt{Transport init failed - Chip ID 0x0000}). Le code embarqué plantait dès 
-l'initialisation du HAL.
+l'initialisation du HAL (Hardware Abstraction Layer).
 
 L'analyse de ce blocage a révélé un désaccord matériel : le code C et le fichier de 
 configuration cachaient une dépendance stricte à l'ancienne plateforme (MM6108). Notre matériel étant la 
@@ -99,7 +99,7 @@ retenir ou espacer ses paquets pour écouter si le canal est libre. \newline
 
 Lors de nos tests initiaux, ces bridages réglementaires faisaient exploser la latence réseau 
 de base à environ 670 ms. Le passage sur le standard américain permet de désactiver ces restrictions 
-d'émission. Bien que cette configuration soit réservée à un cadre expérimental, elle était i
-ndispensable pour ce travail de Bachelor afin de mesurer les performances brutes et réelles de 
+d'émission. Bien que cette configuration soit réservée à un cadre expérimental, elle était 
+indispensable pour ce travail de Bachelor afin de mesurer les performances brutes et réelles de 
 la puce (ramenant la latence radio autour de 3 à 5 ms, tester par ping), indépendamment des 
 limitations légales.

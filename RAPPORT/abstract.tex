@@ -1,10 +1,36 @@
 \section{Résumé - français}
-A écrire a la fin du TB\dots
 
-Le contexte (très bref),
-Le problème
-La méthode
-Le résultat final 
+\textbf{Contexte :} Le pilotage de drones FPV en environnements complexes nécessite un 
+retour vidéo en temps réel. Or, les fréquences standards (2.4 et 5.8 GHz) pénètrent mal 
+les obstacles physiques (conditions NLOS). 
+
+\textbf{Problématique :} La norme Wi-Fi HaLow (IEEE 802.11ah, Sub-1 GHz) offre une excellente 
+pénétration, mais ses mécanismes natifs de fiabilité (acquittements MAC, retransmissions) 
+induisent une latence et une gigue incompatibles avec les exigences strictes du vol en immersion.
+
+\textbf{Méthode :} Ce travail implémente une architecture de bout en bout forçant une transmission 
+unidirectionnelle. Un pont matériel (SPI vers microcontrôleur STM32) encapsule un flux vidéo 
+H.264 (optimisé via GStreamer) en UDP Broadcast sans accusé de réception, verrouillant le modem 
+radio sur une modulation robuste.
+
+\textbf{Résultat intermédiaire :} Les mesures démontrent une latence de transport radio pur d'environ 
+12.5 ms. La latence visuelle globale (\textit{Glass-to-Glass}) se situe actuellement entre 130 et 
+140 ms. La suite du projet visera à trouver la source de ce délai résiduel et à tenter de l'éliminer.
 
 \section{Abstract - English}
-Résumé en angalais
+
+\textbf{Context:} FPV drone piloting in complex environments requires a real-time video feed. However, 
+standard frequencies (2.4 and 5.8 GHz) struggle to penetrate physical obstacles (NLOS conditions).
+
+\textbf{Problem:} The Wi-Fi HaLow standard (IEEE 802.11ah, Sub-1 GHz) offers excellent obstacle 
+penetration, but its native reliability mechanisms (MAC acknowledgments, retransmissions) introduce 
+latency and jitter incompatible with the strict requirements of immersive flight.
+
+\textbf{Method:} This work implements an end-to-end architecture forcing unidirectional transmission. 
+A hardware bridge (SPI to STM32 microcontroller) encapsulates an optimized H.264 video stream 
+(via GStreamer) into UDP Broadcast with no acknowledgments, locking the radio modem onto a robust 
+modulation scheme.
+
+\textbf{Intermediate Result:} Profiling demonstrates a pure radio transport latency of approximately 
+12.5 ms. The overall \textit{Glass-to-Glass} visual latency is currently between 130 and 140 ms. 
+The next phase of the project will focus on understanding and reducing this residual dela.

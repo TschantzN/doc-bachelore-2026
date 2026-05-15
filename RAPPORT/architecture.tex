@@ -1,12 +1,24 @@
 \section{Architecture globale du système}
 
-Afin de répondre aux exigences très strictes de la transmission vidéo basse latence pour le pilotage 
-FPV\index{FPV}, le système a été divisé en trois entités matérielles distinctes : l'émetteur (destiné 
-à être embarqué sur le drone), le relais radio, et la station de réception au sol. 
+Afin de répondre aux exigences de la transmission vidéo basse latence pour le pilotage 
+FPV\index{FPV}, l'architecture du système a été pensée de manière modulaire. La chaîne de transmission 
+a été segmentée en trois entités fonctionnelles et matérielles distinctes :
 
-Cette segmentation architecturale offre un double avantage : elle permet de décharger le 
-microcontrôleur Wi-Fi des lourdes tâches d'encodage vidéo, et elle a rendu possible le profilage 
-et l'itération de chaque élément séparément tout au long de la phase de développement.
+\begin{enumerate}
+    \item \textbf{Le module d'acquisition et d'émission embarqué (TX) :} Destiné à être monté sur le 
+    drone, il est chargé de la capture vidéo brute, de sa compression, et de son émission 
+    radio sur la bande Sub-1 GHz.
+    \item \textbf{Le pont réseau de réception au sol (routeur RX) :} Il agit comme une passerelle réseau 
+    transparente. Son unique rôle est de réceptionner les ondes radio HaLow et de les convertir en trames 
+    Ethernet physiques, sans effectuer de traitement logiciel.
+    \item \textbf{La station de décodage et d'affichage :} Connectée au pont réseau via un câble Ethernet, 
+    cette entité est exclusivement dédiée au traitement logiciel du flux vidéo entrant pour l'afficher 
+    sur l'écran du pilote avec le délai le plus court possible.
+\end{enumerate}
+
+Cette segmentation architecturale offre un double avantage : elle permet de décharger les microcontrôleurs 
+Wi-Fi des lourdes tâches d'encodage/décodage vidéo, et elle a rendu possible le profilage de
+chaque sous-système séparément tout au long de la phase de développement.
 
 % PLACEHOLDER POUR LE SCHEMA GLOBAL
 \begin{figure}[htbp]

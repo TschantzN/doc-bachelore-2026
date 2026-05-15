@@ -32,7 +32,7 @@ a permis d'identifier les leviers d'action suivants :
 \end{itemize}
 
 \subsection{Faisabilité côté Récepteur (Linux / OpenWrt)}
-Le relais radio, configuré en point d'accès (AP) au sol pour réceptionner le flux, 
+Le relais radio, configuré en point d'accès (Access Point, AP) au sol pour réceptionner le flux, 
 repose sur une architecture Linux (OpenWrt). L'analyse du code source du pilote noyau 
 (\textit{kernel driver}) a révélé les éléments suivants :
 \begin{itemize}
@@ -49,7 +49,8 @@ repose sur une architecture Linux (OpenWrt). L'analyse du code source du pilote 
     est techniquement impossible d'appliquer et de maintenir ces paramètres matériels bas niveau tant 
     que le routeur n'est pas formellement connecté à un client. 
     
-    La preuve formelle d'une injection manuelle du LDPC a donc été écartée de l'implémentation finale. 
+    La preuve formelle d'une injection manuelle du LDPC n'a pas pu être clairement établie
+    et a donc été écartée de l'implémentation finale. 
     Néanmoins, la présence active des paramètres liés au LDPC et au MCS 10 dans le code source du pilote 
     confirme la capacité de la puce à utiliser cette correction d'erreur en interne. Nous partons donc 
     du postulat techniquement fondé que le contrôleur radio l'exploite de manière native.
@@ -58,7 +59,7 @@ repose sur une architecture Linux (OpenWrt). L'analyse du code source du pilote 
 \subsection{Conclusion de la faisabilité}
 L'étude démontre que l'objectif de manipulation de la couche physique est réalisable sur les points 
 critiques. S'il s'est avéré impraticable de forger manuellement chaque en-tête MAC pour imposer le 
-LDPC en raison de la machine à états du standard Wi-Fi, l'accès au code source du SDK FreeRTOS et 
+LDPC en raison de la machine d'états du standard Wi-Fi, l'accès au code source du SDK FreeRTOS et 
 des pilotes Linux permet d'appliquer les surcharges (\textit{overrides}) nécessaires pour verrouiller 
 l'utilisation d'un MCS bas. Ces découvertes valident la faisabilité d'une liaison radio déterministe, 
 prérequis absolu pour notre système vidéo.

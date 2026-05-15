@@ -63,13 +63,14 @@ kmssink sync=false max-lateness=0
 
 \subsection{Identification et contournement de la latence de l'ISP}
 Malgré ces optimisations, une latence visuelle globale persistait lors des premiers tests. L'analyse 
-différentielle a prouvé que la latence "fantôme" provenait de l'Image Signal Processor (ISP) matériel 
-de la caméra. 
+différentielle a prouvé qu'au moins une partie que la latence "fantôme" provenait de l'Image Signal 
+Processor (ISP) matériel de la caméra.
 
 Pour effectuer les calculs d'exposition automatique (AE) et de balance des blancs (AWB), l'ISP conserve 
-systématiquement 4 images brutes dans une file d'attente avant de les transmettre à l'encodeur.
-Mathématiquement, pour un capteur configuré pour échantillonner à 24 images par seconde, la durée d'une 
-image est de $41.6\text{ ms}$. Le délai induit par les 4 buffers logiciels est donc de :
+systématiquement un certain nombre d'image brutes dans une file d'attente avant de les transmettre à 
+l'encodeur, nous ferons l'hypothèse qu'il en conserve 4. Mathématiquement, pour un capteur configuré pour 
+échantillonner à 24 images par seconde, la durée d'une image est de $41.6\text{ ms}$. 
+Le délai induit par les 4 buffers logiciels est donc de :
 $$Latence_{ISP} = 4 \times \left( \frac{1000}{24} \right) \approx 166.4\text{ ms}$$
 
 Pour contourner ce verrouillage matériel massif, la solution implémentée consiste à dissocier la fréquence 

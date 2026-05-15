@@ -19,7 +19,7 @@ composant matériel traite et compresse une trame vidéo en un temps extrêmemen
 Pour profiler le transfert SPI\index{SPI} et l'encapsulation LwIP\index{LwIP}, les fonctions classiques 
 (\texttt{HAL\_GetTick()}) manquaient de résolution. Le code a donc exploité le composant matériel ARM 
 CoreSight DWT\index{DWT} (\textit{Data Watchpoint and Trace}). Le registre \texttt{DWT->CYCCNT} 
-s'incrémente à chaque coup d'horloge (160 MHz), offrant une résolution de 6.25 nanosecondes.
+s'incrémente à chaque coup d'horloge (30 MHz), offrant une résolution de 6.25 nanosecondes.
 
 \begin{lstlisting}[language=C]
 // Demarrage du chronometre DWT dans l'interruption SPI
@@ -30,7 +30,7 @@ dwt_start = DWT->CYCCNT;
 // Arret du chronometre et calcul du temps en microsecondes
 dwt_end = DWT->CYCCNT;
 mcu_cycles = dwt_end - dwt_start;
-uint32_t freq_mhz = SystemCoreClock / 1000000; // 160 MHz
+uint32_t freq_mhz = SystemCoreClock / 1000000; // 30 MHz
 uint32_t time_us = mcu_cycles / freq_mhz;
 \end{lstlisting}
 
@@ -79,9 +79,9 @@ L'élimination mathématique de la capture locale ($\sim$7 ms) et du transport r
 d'isoler un délai inexpliqué de plus de 100 ms. Cette latence résiduelle provient de deux limitations 
 inhérentes au matériel grand public :
 \begin{enumerate}
-    \item \textbf{L'Image Signal Processor (ISP) :} Comme identifié précédemment, l'ISP conserve 4 images dans une 
-    file d'attente pour ses calculs d'exposition, générant jusqu'à 166 ms de délai à 24 FPS. (Contourné 
-    partiellement en suréchantillonnant le capteur à 60 FPS).
+    \item \textbf{L'Image Signal Processor (ISP) :} Comme identifié précédemment, l'ISP conserve $\sim$4 images dans une 
+    file d'attente pour ses calculs d'exposition, peut générer jusqu'à 166 ms de délai à 24 FPS. (Contourné 
+    partiellement en suréchantillonnant le capteur à 60 FPS et n'étant pas la seul raison de cette latence).
     \item \textbf{Le pipeline de réception logiciel :} Le parseur GStreamer (\texttt{h264parse}) doit retenir 
     une trame entière pour valider l'intégrité du flux UDP brut. De plus, les gestionnaires de fenêtres 
     des stations de diagnostic (Windows DWM ou X11) imposent souvent un \textit{Triple Buffering} 
@@ -110,7 +110,7 @@ précise des temps de traitement de chaque maillon de la chaîne, indépendammen
 Ce bilan théorique (Encodage + SPI + MCU + Air time + Décodage) donne une somme d'environ \textbf{10 à 13 ms}. Ce résultat mathématique corrobore parfaitement la mesure physique de \textbf{12.47 ms} obtenue lors du test en rafale avec le déclencheur matériel (bouton partagé entre les deux RPi). De même, le test de boucle locale (capture et affichage sur la même carte) mesuré entre 5 et 7 ms valide notre estimation de 2 ms d'encodage et 3 ms de décodage couplés à un très léger \textit{overhead} de l'OS.
 
 \subsection{Bilan "Glass-to-Glass" et perspectives (Rendu intermédiaire)}
-Malgré la fulgurance démontrée du pont réseau Sub-1 GHz, la latence "Glass-to-Glass" absolue (le délai entre un événement réel et son affichage sur l'écran du pilote) mesurée lors de nos derniers essais se situe entre \textbf{130 ms et 140 ms} (sur une architecture combinant RPi 4B et RPi Compute Module).
+Malgré la rapidité démontrée du pont réseau Sub-1 GHz, la latence "Glass-to-Glass" absolue (le délai entre un événement réel et son affichage sur l'écran du pilote) mesurée lors de nos derniers essais se situe entre \textbf{130 ms et 140 ms} (sur une architecture combinant RPi 4B et RPi Compute Module).
 
 Ce décalage met en évidence une latence inexpliquée d'environ 120 ms. Dans le cadre de ce rendu intermédiaire, la source exacte de cette latence résiduelle reste à identifier avec certitude. 
 
