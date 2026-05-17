@@ -19,18 +19,18 @@ radio sur une modulation robuste.
 
 \section{Abstract - English}
 
-\textbf{Context:} FPV drone piloting in complex environments requires a real-time video feed. However, 
+\textbf{Context :} FPV drone piloting in complex environments requires a real-time video feed. However, 
 standard frequencies (2.4 and 5.8 GHz) struggle to penetrate physical obstacles (NLOS conditions).
 
-\textbf{Problem:} The Wi-Fi HaLow standard (IEEE 802.11ah, Sub-1 GHz) offers excellent obstacle 
+\textbf{Problem :} The Wi-Fi HaLow standard (IEEE 802.11ah, Sub-1 GHz) offers excellent obstacle 
 penetration, but its native reliability mechanisms (MAC acknowledgments, retransmissions) introduce 
 latency and jitter incompatible with the strict requirements of immersive flight.
 
-\textbf{Method:} This work implements an end-to-end architecture forcing unidirectional transmission. 
+\textbf{Method :} This work implements an end-to-end architecture forcing unidirectional transmission. 
 A hardware bridge (SPI to STM32 microcontroller) encapsulates an optimized H.264 video stream 
 (via GStreamer) into UDP Broadcast with no acknowledgments, locking the radio modem onto a robust 
 modulation scheme.
 
-\textbf{Intermediate Result:} Profiling demonstrates a pure radio transport latency of approximately 
+\textbf{Intermediate Result :} Profiling demonstrates a pure radio transport latency of approximately 
 12.5 ms. The overall \textit{Glass-to-Glass} visual latency is currently between 130 and 140 ms. 
 The next phase of the project will focus on understanding and reducing this residual delay.

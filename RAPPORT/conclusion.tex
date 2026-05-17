@@ -21,28 +21,43 @@ L'approche itérative adoptée a été déterminante : l'utilisation initiale d'
 (Nvidia Jetson Nano) a permis de certifier les temps d'encodage via le traçage logiciel GStreamer et 
 d'écarter tout doute sur les performances de compression. 
 
-Fort de cette validation de base, le système a pu être efficacement miniaturisé. L'architecture matérielle retenue pour nos tests de bout en bout les plus récents repose ainsi exclusivement sur des plateformes ARM : une Raspberry Pi 4B en émission (TX) et une \textit{Compute Module 4} en réception (RX). L'analyse métrologique de cette chaîne, confirmée par un test de déclencheur physique (bouton partagé), prouve que le transport pur (Encodage matériel, transfert SPI, traitement MCU, temps de vol RF et décodage) s'effectue en \textbf{12 à 13 millisecondes}. La technologie Sub-1 GHz n'est donc en rien un frein à la réactivité requise pour le pilotage.
+Fort de cette validation de base, l'architecture a évolué pour se rapprocher du matériel. La configuration 
+retenue pour nos tests de bout en bout les plus récents repose ainsi sur des plateformes ARM : une Raspberry 
+Pi 4B en émission (TX) et une \textit{Compute Module 4} en réception (RX). L'analyse des latences des différents
+éléments de cette chaîne, confirmée par un test de déclencheur physique (bouton partagé), prouve que le transport 
+pur (transfert SPI, traitement MCU, temps de vol RF) s'effectue en \textbf{12 à 13 millisecondes}. La technologie 
+Sub-1 GHz n'est donc en rien un frein à la réactivité requise pour le pilotage.
 
+\newpage
 \subsection{Objectifs pour la phase finale}
-Si le lien radio est pleinement validé, la latence "Glass-to-Glass" absolue mesurée actuellement se 
-situe entre \textbf{130 ms et 140 ms}. Ce décalage met en évidence une latence résiduelle importante 
-et confirme que les goulots d'étranglement des systèmes vidéo numériques résident désormais dans les 
-couches d'acquisition et de restitution.
+Si le lien radio a démontré d'excellentes performances intrinsèques sur des bancs de test isolés, la 
+latence "Glass-to-Glass" absolue mesurée actuellement sur le flux vidéo complet se situe entre 
+\textbf{130 ms et 140 ms}. Ce décalage met en évidence une latence résiduelle importante d'environ 
+120 ms, dont l'origine exacte reste à identifier et à prouver formellement.
 
-Les hypothèses principales pointent vers les files d'attente internes de l'Image Signal Processor (ISP) 
-de la caméra, ainsi que vers les tampons de reconstruction des trames réseau et la synchronisation 
-verticale inhérente aux pilotes d'affichage.
+Les hypothèses de travail actuelles s'orientent principalement vers les extrémités de la chaîne : les files 
+d'attente internes de l'Image Signal Processor (ISP) de la caméra à l'acquisition (malgré les tests en
+boucle locale), ainsi que les tampons 
+logiciels de reconstruction réseau et la synchronisation verticale inhérente aux pilotes d'affichage 
+à la restitution. Bien que la faible latence mesurée lors du test de rebouclement vidéo semble écarter cette 
+dernière option, des investigations supplémentaires resteront nécessaires pour l'exclure définitivement. 
+Toutefois, le comportement du pont de communication lui-même (MCU et puce HaLow) 
+sous une charge vidéo prolongée et en conditions RF dégradées nécessitera également d'être poussé 
+plus loin pour écarter définitivement la piste d'un goulot d'étranglement réseau dynamique.
 
-Les semaines restantes avant le rendu final de ce travail de Bachelor seront consacrées à l'isolation 
-et à la caractérisation de ces variables. L'objectif sera de déterminer si des optimisations logicielles 
-de très bas niveau (contournement de l'ISP, affichage \textit{Bare-Metal} strict) permettront de gommer 
-ces 120 ms d'attente, rapprochant ainsi le système des standards de l'industrie FPV et validant 
-définitivement le potentiel du Wi-Fi HaLow pour l'exploration par drone en milieux confinés.
+Les semaines restantes avant le rendu final de ce travail de Bachelor seront donc dédiées à l'identification 
+formelle de chaque source de latence résiduelle dans le système. L'enjeu consistera à concevoir de nouveaux 
+protocoles de mesure pour isoler chaque sous-système, de la lentille de la caméra jusqu'à l'écran. L'objectif 
+ultime sera d'appliquer les optimisations nécessaires (contournement de l'ISP, affichage \textit{Bare-Metal} 
+strict, tests de stress réseau) afin de gommer ce délai, rapprochant ainsi le système des standards FPV 
+et validant la viabilité du Wi-Fi HaLow pour l'exploration par drone. De plus, la suite de ce travail permettra 
+d'approfondir l'analyse comparative des performances et de l'impact sur la latence des différents décodeurs et 
+encodeurs logiciels utilisés dans notre chaîne de traitement.
 
 \begin{flushright}
     \begin{minipage}{5cm}
         \centering
         Nathan Tschantz \\[0.5cm]
-        \includegraphics[height=1.5cm]{imgs/signature.png}
+        \includegraphics[height=2cm]{imgs/signature.png}
     \end{minipage}
 \end{flushright}

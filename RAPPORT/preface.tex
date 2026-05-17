@@ -28,7 +28,7 @@ vidéo basse latence, les concepts et acronymes suivants seront couramment utili
     reconstruire des paquets de données corrompus par de mauvaises conditions radio, évitant ainsi de devoir redemander 
     l'envoi du paquet (ce qui détruirait la latence vidéo).
     
-    \item[Couches PHY et MAC :] Niveaux fondamentaux du modèle réseau. La \textbf{couche PHY} (Physique) gère la transformation 
+    \item[Couches PHY et MAC :] Niveaux fondamentaux du modèle OSI. La \textbf{couche PHY} (Physique) gère la transformation 
     des bits en ondes radio. La \textbf{couche MAC} (\textit{Media Access Control}) gère les règles d'accès à l'antenne et 
     les retransmissions. Ce projet modifie directement ces couches pour les adapter au flux vidéo.
     
@@ -46,6 +46,12 @@ vidéo basse latence, les concepts et acronymes suivants seront couramment utili
 
     \item[Gigue (\textit{Jitter}) :] Variation temporelle de la latence. Dans un flux vidéo en temps réel, une forte gigue (des paquets arrivant 
     en rafales irrégulières) provoque des saccades visuelles souvent plus perturbantes pour le pilotage qu'une latence fixe et stable.
+
+    \item[Provisionnement (\textit{Provisioning}) :] Processus technique consistant à injecter des données de configuration vitales, des fichiers 
+    de calibration matérielle (binaire de microcode BCF) et des profils réglementaires régionaux (\textit{Country Code}) dans une zone mémoire non 
+    volatile dédiée (le \textit{Config Store} du STM32). Cette opération, distincte du flashage du firmware applicatif en C, est indispensable 
+    pour permettre le démarrage d'une puce radio dépourvue de mémoire morte interne (comme le SoC Morse Micro MM8108), en lui fournissant sa feuille de 
+    route matérielle dès sa mise sous tension.
 \end{description}
 
 \vspace{1cm}

@@ -29,7 +29,7 @@ chaque sous-système séparément tout au long de la phase de développement.
 \end{figure}
 
 
-\subsection{L'émetteur embarqué (TX)}
+\subsection{Le module d'acquisition et d'émission embarqué (TX)}
 L'émetteur embarqué constitue le point de départ de la chaîne d'acquisition. Le module de traitement 
 vidéo n'a pas été figé immédiatement ; plusieurs ordinateurs ont été évalués successivement pour 
 isoler les variables de performance :
@@ -54,7 +54,7 @@ Il encapsule les données vidéo brutes dans des paquets UDP à l'aide de la pil
 avant de les expédier au module radio \textbf{Morse Micro MM8108 (EKH05)}\index{Wi-Fi HaLow!MM8108} 
 pour la transmission RF sur la bande Sub-1 GHz.
 
-\subsection{Le relais radio}
+\subsection{Le pont réseau de réception au sol (routeur RX)}
 Contrairement aux systèmes Wi-Fi traditionnels où le point d'accès traite intensivement les paquets, le 
 relais radio de notre architecture est conçu pour être le plus transparent possible et est resté constant 
 durant tout le projet.
@@ -65,7 +65,7 @@ OpenWrt\index{OpenWrt}, est configuré pour agir comme un simple pont logiciel (
 Il réceptionne les trames 802.11ah sur son interface sans-fil et les injecte directement sur son interface 
 Ethernet physique, limitant ainsi le temps de traitement logiciel par le CPU du routeur.
 
-\subsection{La station de réception au sol (RX)}
+\subsection{La station de décodage et d'affichage}
 La station au sol est le dernier maillon de la chaîne, responsable du décodage et de l'affichage. 
 L'objectif de ce projet étant d'observer et de maîtriser chaque source de latence, deux environnements 
 radicalement différents ont été employés :
@@ -87,10 +87,11 @@ radicalement différents ont été employés :
 \end{itemize}
 \newpage
 \subsection{Précision de la structure du document}
-Comme déterminé précédemment, voici l'ordre dans lequel ce rapport sera structuré de manière plus détaillé. 
+Comme déterminé précédemment, voici l'ordre dans lequel ce rapport sera structuré de manière plus détaillée. 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb.png}
     \caption{Flux logique du système : (1) Lien réseau Sub-1 GHz, (2) Capture vidéo, (3) Interfaçage SPI, (4) Plateformes de traitement TX et RX.}
     \label{fig:complet_schematic_nb}
 \end{figure}
+

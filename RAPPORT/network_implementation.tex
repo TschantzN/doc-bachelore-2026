@@ -19,7 +19,7 @@ IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 255);
 En ciblant l'adresse \texttt{.255}, la couche réseau LwIP force l'en-tête Wi-Fi à utiliser l'adresse MAC 
 de destination \texttt{FF:FF:FF:FF:FF:FF}. Selon la norme 802.11, les trames diffusées à cette adresse 
 ne déclenchent aucun acquittement (ACK) de la part des récepteurs. L'émetteur expédie ainsi les paquets 
-en flux tendu, ce qui annule la latence induite par les retransmissions au prix de potentielles pertes 
+en flux tendu, ce qui annule la latence induite par les retransmissions au prix, toutefois, de potentielles pertes 
 de paquets.
 
 De plus, la taille de la charge utile (\textit{Payload}) UDP a été fixée à 1400 octets :
@@ -32,10 +32,10 @@ d'en-têtes (Overhead MAC+IP+UDP) par rapport aux données utiles.
 \subsection{Optimisation de la réactivité radio : Désactivation du PSM}
 Par défaut, les modules Wi-Fi HaLow Morse Micro intègrent des mécanismes de gestion de l'énergie 
 (\textit{Power Saving Mode}) destinés aux capteurs IoT sur batterie. Ce mode place la radio en 
-veille entre les transmissions, ce qui induisait dans nos tests une latence systématique de environ 
+veille entre les transmissions, ce qui induisait dans nos tests une latence systématique d'environ 
 \textbf{22 ms} par paquet.
 
-Pour un usage FPV, cette économie d'énergie n'est pas accéptable. Le mode veille a été explicitement désactivé 
+Pour un usage FPV, ce processus d'économie d'énergie n'est pas acceptable. Le mode veille a été explicitement désactivé 
 dans le firmware du STM32 via l'appel suivant :
 \begin{lstlisting}[language=C]
 mmwlan_set_power_save_mode(MMWLAN_PS_DISABLED);
@@ -106,17 +106,17 @@ $$D_{brut} = W \times H \times F \times B_{pp}$$
 
 Afin de contourner la rétention d'image du processeur de signal (ISP) de la caméra, la fréquence 
 d'échantillonnage a dû être fixée à 60 FPS. Pour le flux vidéo retenu en résolution 480p 
-(soit $720 \times 480$ pixels), capturé à 60 images par seconde et codé sur 24 bits de couleurs :
-$$D_{brut\_480p60} = 720 \times 480 \times 60 \times 24 = 497\,664\,000 \text{ bps}$$
-Soit environ 497.6 Mbps.
+(soit $640 \times 480$ pixels), capturé à 60 images par seconde et codé sur 24 bits de couleurs :
+$$D_{brut\_480p60} = 640 \times 480 \times 60 \times 24 = 442\,368\,000 \text{ bps}$$
+Soit environ 442.4 Mbps.
 
 Un encodeur matériel moderne (H.264 / H.265), configuré pour du streaming en temps réel, offre un ratio de 
 compression effectif standard avoisinant 1:200. Le débit réseau théorique requis deviendrait alors :
 $$D_{cible} = \frac{D_{brut}}{C_{ratio}}$$
-$$D_{cible\_480p60} = \frac{497.6 \text{ Mbps}}{200} \approx 2.49 \text{ Mbps}$$
+$$D_{cible\_480p60} = \frac{442.4 \text{ Mbps}}{200} \approx 2.21 \text{ Mbps}$$
 
 Cette modélisation démontre clairement qu'à 60 images par seconde, même une résolution modeste de 480p avec 
-une compression standard exigerait environ 2.49 Mbps, ce qui saturerait immédiatement le canal radio imposé 
+une compression standard exigerait environ 2.21 Mbps, ce qui saturerait immédiatement le canal radio imposé 
 par le MCS 2 (limité empiriquement à 1.34 Mbps).
 
 C'est pour cette raison critique que l'encodeur matériel doit être paramétré de manière drastique. Afin de 
@@ -126,8 +126,8 @@ a été bridé de manière stricte (CBR - \textit{Constant Bit Rate}) à \textbf
 
 \subsubsection{Impact de la compression sur la fragmentation des paquets}
 Ce compromis de 400 kbps impose à l'encodeur un ratio de compression extrême (environ 1:1240) au détriment 
-de la fidélité visuelle, mais garantit un avantage décisif sur la latence matérielle. En lissant ce débit 
-sur la fréquence d'échantillonnage, le poids moyen d'une image vidéo compressée se calcule ainsi :
+de la fidélité visuelle, mais garantit un avantage décisif sur la latence matérielle. En tenant compte du débit 
+et de la fréquence d'échantillonnage (réquence de capture d'image), le poids moyen d'une image vidéo compressée se calcule ainsi :
 $$Taille_{image} = \frac{400\,000 \text{ bits/s}}{60 \text{ FPS} \times 8 \text{ bits}} \approx 833 \text{ octets}$$
 
 Sachant que la charge utile maximale (MTU) définie pour nos trames UDP et nos transferts SPI est de 

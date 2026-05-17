@@ -5,15 +5,16 @@ Le transfert du flux vidéo compressé entre le processeur d'acquisition (Jetson
 au MCU pour l'émission RF.
 
 \subsection{Identification du bus SPI matériel}
-Une difficulté technique est apparue lors de la configuration physique de la liaison. La documentation 
-fournie par Morse Micro pour la carte d'évaluation \textbf{EKH05} ne spécifiait pas explicitement sur 
-quelles broches physiques du connecteur d'extension le bus SPI du microcontrôleur était routé. De plus
-le SDK ne supporte aucun des péripheriques à part la puce Wi-Fi.
+Une attention particulière a dû être portée à la configuration physique de la liaison. Le SDK Morse Micro 
+ne supportant nativement aucun périphérique standard en dehors de la puce Wi-Fi, le routage exact du bus SPI 
+du microcontrôleur sur le connecteur d'extension n'était pas documenté dans le guide utilisateur de base.
 
-Afin d'identifier le bus actif, une méthodologie empirique a été adoptée : une tension de 3,3 V a été 
-appliquée sur les différentes broches d'entrée potentielles pouvant gérer une communication SPI, 
-tout en surveillant leur tension à l'aide d'un multimètre. Cette phase de test a permis de confirmer 
-le routage (\ref{tab:spi_mapping}). 
+Pour résoudre cette inconnue, une analyse du dossier de conception officiel de la carte \textbf{EKH05} 
+\cite{MorseDesignPackage} a été menée afin d'identifier théoriquement les broches physiques et les pistes 
+reliées aux périphériques internes du processeur. Afin de valider de manière absolue ce schéma avant d'y 
+connecter l'ordinateur d'acquisition, une méthodologie de vérification simple a été effectuée : une 
+tension de 3,3 V a été appliquée sur les lignes d'entrée potentielles repérées, permettant de 
+confirmer au multimètre la correspondance exacte du routage (\ref{tab:spi_mapping}).
 
 \begin{table}[htbp]
     \centering

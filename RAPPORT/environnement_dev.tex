@@ -2,7 +2,7 @@
 
 Le développement du firmware pour le microcontrôleur gérant la transmission (STM32) repose sur 
 le kit de développement logiciel officiel de Morse Micro (\texttt{mm-iot-sdk}). Ce SDK étant 
-nativement conçu pour un environnement Linux avec platformio et des chaînes de cross compilation 
+nativement conçu pour un environnement Linux avec Platformio et des chaînes de cross compilation 
 préinstallées, son intégration sous Windows a nécessité plusieurs adaptations.
 
 
@@ -16,7 +16,7 @@ sous-modules a été requise (git submodules).
 L'environnement de développement choisi est \textbf{STM32CubeIDE}\index{STM32CubeIDE}. Le SDK ne 
 respectant pas la structure standard de cet IDE, le projet a été importé en tant que "Makefile 
 Project with Existing Code", en ciblant spécifiquement le répertoire de la carte d'évaluation de 
-l'émetteur (\texttt{mm-mm6108-ekh05}, avant sa mise à jour, \texttt{mm-mm8108-ekh05} après).
+l'émetteur (\texttt{mm-mm6108-ekh05} avant sa mise à jour, \texttt{mm-mm8108-ekh05} après).
 
 \subsection{Adaptation de la chaîne de cross compilation}
 Sous Windows, les outils de compilation en ligne de commande tels que \texttt{make} ne sont pas natifs. 
@@ -101,5 +101,5 @@ Lors de nos tests initiaux, ces bridages réglementaires faisaient exploser la l
 de base à environ 670 ms. Le passage sur le standard américain permet de désactiver ces restrictions 
 d'émission. Bien que cette configuration soit réservée à un cadre expérimental, elle était 
 indispensable pour ce travail de Bachelor afin de mesurer les performances brutes et réelles de 
-la puce (ramenant la latence radio autour de 3 à 5 ms, tester par ping), indépendamment des 
+la puce (ramenant la latence radio autour de 3 à 5 ms, testée par ping), indépendamment des 
 limitations légales.
