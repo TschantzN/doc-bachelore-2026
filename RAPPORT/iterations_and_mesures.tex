@@ -95,7 +95,24 @@ La latence mesurée fut de \textbf{5 à 7 ms}. Ce résultat a prouvé que la
 capture et la pile logicielle standard n'étaient pas le goulot d'étranglement. L'itération vers un OS 
 personnalisé a donc été abandonnée.
 
-\subsection{Bilan "Glass-to-Glass" et latence résiduelle}
+\subsection{Identification et contournement de la latence de l'ISP}
+Malgré ces optimisations, une latence visuelle globale persistait lors des premiers tests. L'analyse 
+a prouvé qu'au moins une partie de la latence "fantôme" provenait de l'Image Signal 
+Processor (ISP) matériel de la caméra.
+
+Pour effectuer les calculs d'exposition automatique (AE) et de balance des blancs (AWB), l'ISP conserve 
+systématiquement un certain nombre d'images brutes dans une file d'attente avant de les transmettre à 
+l'encodeur, nous émettons l'hypothèse qu'il en conserve 4. Mathématiquement, pour un capteur configuré pour 
+échantillonner à 24 images par seconde, la durée d'une image est de $41.6\text{ ms}$. 
+Le délai induit par les 4 buffers logiciels est donc de :
+$$Latence_{ISP} = 4 \times \left( \frac{1000}{24} \right) \approx 166.4\text{ ms}$$
+
+Pour contourner ce verrouillage matériel massif, la solution implémentée consiste à dissocier la fréquence 
+d'échantillonnage du capteur de la fréquence réseau. En forçant le capteur à capturer à 60 FPS, les 4 
+buffers de l'ISP sont purgés nettement plus vite ($4 \times 16.6\text{ ms} = 66.4\text{ ms}$), réduisant 
+instantanément la latence visuelle de 100 ms.
+
+\subsection{Latence "Glass-to-Glass" et latence résiduelle}
 La latence "Glass-to-Glass" absolue (entre un événement réel et son affichage sur l'écran final) a été 
 mesurée entre \textbf{130 ms et 140 ms}.
 
@@ -152,7 +169,7 @@ calcul matériel pur. De même, le test de boucle locale (capture et affichage s
 mesuré entre 5 et 7 ms valide notre estimation d'encodage et de décodage couplés à ce même
 \textit{overhead} de l'OS.
 
-\subsection{Bilan "Glass-to-Glass" et perspectives (Rendu intermédiaire)}
+\subsection{Bilan et perspectives (Rendu intermédiaire)}
 Malgré la rapidité démontrée du pont réseau Sub-1 GHz, la latence "Glass-to-Glass" absolue (le délai entre 
 un événement réel et son affichage sur l'écran du pilote) mesurée lors de nos derniers essais se situe 
 entre \textbf{130 ms et 140 ms} (sur une architecture combinant RPi 4B et RPi Compute Module).

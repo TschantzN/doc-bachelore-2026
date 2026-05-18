@@ -1,7 +1,13 @@
 \section{Interfaçage matériel et transfert SPI}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb4.png}
+    \caption{(4) Interfaçage SPI}
+    \label{fig:complet_schematic_nb2}
+\end{figure}
 
-Le transfert du flux vidéo compressé entre le processeur d'acquisition (Jetson / RPi) et le modem radio 
-(STM32) s'effectue via le bus matériel SPI. Cette étape est très importante car elle envoie les données 
+Le transfert du flux vidéo compressé entre le processeur d'acquisition (Jetson / RPi) et le modem radio
+(STM32) s'effectue via le bus matériel SPI. Cette étape est très importante car elle envoie les données
 au MCU pour l'émission RF.
 
 \subsection{Identification du bus SPI matériel}

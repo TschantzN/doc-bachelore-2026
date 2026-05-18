@@ -1,5 +1,12 @@
 \section{Implémentation du réseau Wi-Fi HaLow}
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb1.png}
+    \caption{(1) Lien réseau Sub-1 GHz}
+    \label{fig:complet_schematic_nb1}
+\end{figure}
+
 La norme IEEE 802.11 intègre intrinsèquement des mécanismes de fiabilité, tels que les accusés 
 de réception (ACK) et les retransmissions automatiques, destinés à garantir l'intégrité des données. 
 Cependant, dans le cadre d'un flux vidéo temps réel pour le FPV, la perte d'une trame est visuellement 
@@ -127,7 +134,7 @@ a été bridé de manière stricte (CBR - \textit{Constant Bit Rate}) à \textbf
 \subsubsection{Impact de la compression sur la fragmentation des paquets}
 Ce compromis de 400 kbps impose à l'encodeur un ratio de compression extrême (environ 1:1240) au détriment 
 de la fidélité visuelle, mais garantit un avantage décisif sur la latence matérielle. En tenant compte du débit 
-et de la fréquence d'échantillonnage (réquence de capture d'image), le poids moyen d'une image vidéo compressée se calcule ainsi :
+et de la fréquence d'échantillonnage (fréquence de capture d'image), le poids moyen d'une image vidéo compressée se calcule ainsi :
 $$Taille_{image} = \frac{400\,000 \text{ bits/s}}{60 \text{ FPS} \times 8 \text{ bits}} \approx 833 \text{ octets}$$
 
 Sachant que la charge utile maximale (MTU) définie pour nos trames UDP et nos transferts SPI est de 

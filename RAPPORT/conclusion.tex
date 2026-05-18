@@ -3,8 +3,8 @@
 Le pilotage de drones FPV (\textit{First Person View}) en environnement complexe se heurte depuis 
 toujours à l'incapacité des fréquences standards (2.4 GHz et 5.8 GHz) à pénétrer efficacement les 
 obstacles physiques. Ce travail de Bachelor vise à évaluer une solution de rupture technologique en
- détournant la norme IEEE 802.11ah (Wi-Fi HaLow), opérant dans la bande Sub-1 GHz, pour y faire 
- transiter un flux vidéo en temps réel.
+détournant la norme IEEE 802.11ah (Wi-Fi HaLow), opérant dans la bande Sub-1 GHz, pour y faire 
+transiter un flux vidéo en temps réel.
 
 À ce stade d'avancement du projet, l'architecture fondamentale du système est non seulement 
 établie, mais ses performances ont été démontrées et mesurées de manière rigoureuse.
@@ -26,7 +26,10 @@ retenue pour nos tests de bout en bout les plus récents repose ainsi sur des pl
 Pi 4B en émission (TX) et une \textit{Compute Module 4} en réception (RX). L'analyse des latences des différents
 éléments de cette chaîne, confirmée par un test de déclencheur physique (bouton partagé), prouve que le transport 
 pur (transfert SPI, traitement MCU, temps de vol RF) s'effectue en \textbf{12 à 13 millisecondes}. La technologie 
-Sub-1 GHz n'est donc en rien un frein à la réactivité requise pour le pilotage.
+Sub-1 GHz n'est donc en rien un frein à la réactivité requise pour le pilotage.\newline\newline
+
+Les notes journalières, journal de travail et diagrammes de Gantt sont accessibles ici :
+\url{https://github.com/TschantzN/doc-bachelore-2026}
 
 \newpage
 \subsection{Objectifs pour la phase finale}

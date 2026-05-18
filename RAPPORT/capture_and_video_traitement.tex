@@ -1,9 +1,7 @@
 \section{Capture et traitement du flux vidéo}
-
-Une fois le pont réseau Sub-1 GHz établi, le défi consiste à formater la source vidéo pour qu'elle puisse 
-traverser ce canal étroit sans générer de goulots d'étranglement. Cette section détaille les choix 
+Une fois le pont réseau Sub-1 GHz établi, le défi consiste à formater la source vidéo pour qu'elle puisse
+traverser ce canal étroit sans générer de goulots d'étranglement. Cette section détaille les choix
 logiciels, l'optimisation des paramètres de compression, et la gestion des tampons matériels.
-
 
 \subsection{Arbitrage entre les normes H.264 et H.265}
 Le choix initial du projet s'était porté sur la norme \textbf{H.265 (HEVC)}. Successeur du H.264, elle 
@@ -32,8 +30,15 @@ au détriment de l'efficacité de compression absolue.
 
 
 \subsection{Pipelines d'émission (TX)}
-Afin de valider cette configuration sur différentes architectures matérielles, les pipelines ont été 
-adaptés :
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb2.png}
+    \caption{(2) Capture vidéo}
+    \label{fig:complet_schematic_nb3}
+\end{figure}
+Pour implémenter cette stratégie de très basse latence en situation réelle, les chaînes de traitement 
+(pipelines) ont été développées et adaptées selon l'architecture matérielle cible (Nvidia ou Raspberry Pi). 
+Elles intègrent de nombreux paramètres spécifiques qui seront détaillés ci-après :
 \begin{lstlisting}[language=bash]
 # Sur Nvidia Jetson Nano (NVENC)
 gst-launch-1.0 nvarguscamerasrc ! \
@@ -72,6 +77,12 @@ la chaîne et son débit :
 \end{itemize}
 
 \subsection{Pipelines de réception et d'affichage (RX)}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb3.png}
+    \caption{(3) Plateformes de traitement}
+    \label{fig:complet_schematic_nb4}
+\end{figure}
 À la réception, le défi s'inverse : il faut décoder et afficher le plus vite possible. L'élément critique 
 est \texttt{sync=false}, qui ordonne à GStreamer d'afficher chaque trame dès qu'elle est prête, en 
 ignorant les horodatages.
@@ -104,23 +115,6 @@ Tout comme pour la phase d'émission, l'arborescence des éléments logiciels de
     \item \textbf{\texttt{max-lateness=0} :} Indique au moteur de rendu de ne tolérer aucun retard de traitement. Associé à l'omission de la synchronisation, ce drapeau 
     force le pipeline à ignorer toute tentative de calcul de recalage temporel pouvant induire de la gigue.
 \end{itemize}
-
-\subsection{Identification et contournement de la latence de l'ISP}
-Malgré ces optimisations, une latence visuelle globale persistait lors des premiers tests. L'analyse 
-a prouvé qu'au moins une partie de la latence "fantôme" provenait de l'Image Signal 
-Processor (ISP) matériel de la caméra.
-
-Pour effectuer les calculs d'exposition automatique (AE) et de balance des blancs (AWB), l'ISP conserve 
-systématiquement un certain nombre d'images brutes dans une file d'attente avant de les transmettre à 
-l'encodeur, nous émettons l'hypothèse qu'il en conserve 4. Mathématiquement, pour un capteur configuré pour 
-échantillonner à 24 images par seconde, la durée d'une image est de $41.6\text{ ms}$. 
-Le délai induit par les 4 buffers logiciels est donc de :
-$$Latence_{ISP} = 4 \times \left( \frac{1000}{24} \right) \approx 166.4\text{ ms}$$
-
-Pour contourner ce verrouillage matériel massif, la solution implémentée consiste à dissocier la fréquence 
-d'échantillonnage du capteur de la fréquence réseau. En forçant le capteur à capturer à 60 FPS, les 4 
-buffers de l'ISP sont purgés nettement plus vite ($4 \times 16.6\text{ ms} = 66.4\text{ ms}$), réduisant 
-instantanément la latence visuelle de 100 ms.
 
 \subsection{Outils de diagnostic réseau}
 En complément de GStreamer, des utilitaires standards ont été employés pour le diagnostic du flux. 
