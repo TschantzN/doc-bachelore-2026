@@ -19,13 +19,14 @@ d'exploiter un décodage extrêmement rapide sur Raspberry Pi, ramenant la laten
 de la milliseconde tout en conservant une fluidité d'image compatible avec le pilotage FPV.
 
 \subsection{Le framework GStreamer et l'optimisation H.264}
-Pour gérer l'acquisition, la compression et l'encapsulation de la vidéo, le framework \textit{open-source} 
-GStreamer\index{GStreamer} a été retenu de bout en bout. Son architecture modulaire permet de relier 
-directement la sortie d'un capteur matériel à un encodeur, en minimisant les copies en mémoire vive 
-(\textit{Zero-Copy}).
+Pour gérer le traitement, la compression et l'encapsulation de la vidéo, le framework \textit{open-source} 
+GStreamer\index{GStreamer} a été retenu comme outil principal de l'architecture. Son approche modulaire 
+permet de relier directement la sortie d'un composant matériel à un autre, en minimisant les copies en 
+mémoire vive (\textit{Zero-Copy}).
 
-La compression du flux exploite donc la norme H.264. La configuration a été pensée pour prioriser la vitesse 
-au détriment de l'efficacité de compression absolue.
+Bien que l'acquisition sur Raspberry Pi ait nécessité le recours ponctuel à un outil natif, la logique de 
+compression du flux exploite universellement la norme H.264. La stratégie de configuration globale a été 
+pensée pour prioriser la vitesse d'exécution au détriment de la qualité visuelle.
 
 \newpage
 
@@ -37,8 +38,18 @@ au détriment de l'efficacité de compression absolue.
     \label{fig:complet_schematic_nb3}
 \end{figure}
 Pour implémenter cette stratégie de très basse latence en situation réelle, les chaînes de traitement 
-(pipelines) ont été développées et adaptées selon l'architecture matérielle cible (Nvidia ou Raspberry Pi). 
-Elles intègrent de nombreux paramètres spécifiques qui seront détaillés ci-après :
+ont été développées et adaptées selon l'architecture matérielle cible. 
+
+Lors des premiers essais sur la Raspberry Pi 4B, il a été constaté que l'utilisation de l'encodeur 
+matériel intégré au travers du plugin GStreamer standard (\texttt{v4l2h264enc}) introduisait une latence 
+inacceptable. L'empilement logiciel et la gestion des mémoires tampons du pilote V4L2 ralentissaient 
+fortement l'acquisition.
+
+Pour la plateforme Raspberry Pi, GStreamer a donc été écarté à l'émission au profit de l'outil 
+natif \texttt{rpicam-vid}. Basé sur \textit{libcamera}, il permet un accès direct et optimisé au 
+processeur de traitement d'image (ISP) et à l'encodeur matériel (H.264) de la carte, réduisant 
+drastiquement le temps de traitement.
+
 \begin{lstlisting}[language=bash]
 # Sur Nvidia Jetson Nano (NVENC)
 gst-launch-1.0 nvarguscamerasrc ! \
@@ -47,33 +58,39 @@ nvv4l2h264enc bitrate=400000 control-rate=1 preset-level=1 \
 insert-sps-pps=true idrinterval=1000 maxperf-enable=1 num-B-Frames=0 ! \
 h264parse ! fdsink
 
-# Sur Raspberry Pi 4 (V4L2)
+# Sur Raspberry Pi 4B (V4L2)
 gst-launch-1.0 v4l2src device=/dev/video0 ! \
 'video/x-raw,width=640,height=480,framerate=60/1' ! \
 v4l2h264enc extra-controls="controls,video_bitrate=400000,video_b_frames=0" ! \
 h264parse ! fdsink
+
+# Sur Raspberry Pi 4B (Outil natif libcamera rpicam-vid)
+rpicam-vid -t 0 --width 640 --height 480 --framerate 60 --bitrate 400000 \
+--profile baseline --inline --intra 60 --flush -o -
 \end{lstlisting}
 
 \subsubsection{Précisions sur les paramètres d'envoi}
-Certains drapeaux (\textit{flags}) spécifiques ont été ajoutés pour forcer le comportement temps réel de 
-la chaîne et son débit :
+Certains drapeaux (\textit{flags}) spécifiques ont été ajoutés pour forcer le comportement temps réel des chaînes et leurs débits :
 \begin{itemize}
-    \item \textbf{Le contrôle de débit strict (CBR - \texttt{control-rate=1}) :} Le débit est verrouillé 
-    à 400 kbps pour éviter tout pic de données soudain qui saturerait le bus SPI.
-    \item \textbf{La désactivation des images bidirectionnelles (\texttt{num-B-Frames=0}) :} Très important
-    pour la basse latence. L'encodeur n'a plus besoin d'attendre l'image suivante pour calculer 
-    l'image courante.
-    \item \textbf{L'espacement des images clés (\texttt{idrinterval=1000}) :} L'envoi d'images clés 
-    (I-Frames), très volumineuses, est espacé au maximum. Limiter leur fréquence évite les rafales 
-    massives de paquets (\textit{bursts}) qui saturent la radio.
-    \item \textbf{\texttt{disable-passthrough=true} :} Par défaut, un parseur peut laisser passer les 
-    données sans les traiter si le format semble correct. Ce flag force l'élément \texttt{h264parse} à 
-    analyser activement chaque octet du flux pour reconstruire proprement les unités de décodage 
-    (NAL units). Cela garantit que le décodeur reçoit des trames parfaitement alignées, évitant 
-    toute attente inutile.
-    \item \textbf{\texttt{config-interval=-1} :} Force l'envoi des informations de configuration (SPS/PPS)
-     à chaque image clé, permettant au récepteur de reprendre le flux instantanément même en cas de perte 
-     de connexion temporaire.
+\item \textbf{Le contrôle de débit strict (CBR) :} Le débit est verrouillé à 400 kbps 
+    (\texttt{bitrate=400000}) pour éviter tout pic de données soudain qui saturerait le bus SPI 
+    et la mémoire du STM32.
+    \item \textbf{L'absence d'images bidirectionnelles :} Sur GStreamer, \texttt{num-B-Frames=0} est 
+    explicitement appelé. Sur Raspberry Pi, l'utilisation du profil \texttt{--profile baseline} garantit 
+    que l'encodeur ne génère aucune trame "B" nécessitant d'attendre l'image future, supprimant ainsi un 
+    délai algorithmique.
+    \item \textbf{L'espacement des images clés (I-Frames) :} L'envoi d'images clés, très volumineuses, 
+    doit être contrôlé. Sur la Jetson, \texttt{idrinterval=1000} les espace au maximum. Sur la Raspberry Pi, 
+    \texttt{--intra 60} force une image clé par seconde (à 60 fps) pour permettre au récepteur de raccrocher 
+    rapidement en cas de perte de signal RF.
+    \item \textbf{L'injection des en-têtes de flux :} Les arguments \texttt{insert-sps-pps=true} (Jetson) 
+    et \texttt{--inline} (RPi) forcent l'encodeur à écrire les informations de séquence (SPS/PPS) à chaque 
+    image clé. Sans cela, un récepteur subissant une micro-coupure réseau serait incapable de reprendre 
+    le décodage du flux en cours de route.
+    \item \textbf{L'expulsion immédiate des tampons (Flush) :} L'argument \texttt{--flush} sur \texttt{rpicam-vid} 
+    garantit que les données H.264 sont immédiatement poussées dans la sortie standard (le *pipe* relié 
+    à notre programme C) dès qu'elles sont prêtes, sans attendre de remplir un tampon logiciel de l'OS. 
+    Sur GStreamer, c'est le \texttt{h264parse disable-passthrough=true} qui force cet alignement immédiat.
 \end{itemize}
 
 \newpage
