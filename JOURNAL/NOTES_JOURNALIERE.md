@@ -2359,9 +2359,303 @@ nice -n -20 gst-launch-1.0 -v udpsrc address=0.0.0.0 port=1337 buffer-size=0 ! "
 ```
 vérifier la commande.
 ### Mecredi 20.05 15h00
-**Rendu intermédiaire** 
+
+### Vendredi 22.05
+
+fait de nouveau test avec le bouton. la latence pour un burst de 100 packets était entre 500 et 1000 ms donc entre 5 et 10ms par packets,excellent.
+mais avec 1000 ca plantais... (refaire le teste maintenant que la rpi est flasher) 
+
+test de latence entre la rpi4b et mon pc avec cable ethernet directe... et comme attendu on tombe sur environ 100ms alors que il y a aucun élément réseau. 
+cela confirme que le reste de la latence (20 a 40ms) provient de mon réseau sub 1G mais le reste et la majorité viens de l'encodage/décodage
+
+RX :
+```bash
+./gst-launch-1.0 -e -v udpsrc port=1337 buffer-size=0 ! "video/x-h264,width=640,height=480,framerate=60/1,profile=baseline,stream-format=byte-stream,alignment=nal" ! h264parse disable-passthrough=true config-interval=-1 ! queue max-size-buffers=1 leaky=downstream ! avdec_h264 ! videoconvert ! autovideosink sync=false
+```
+TX :
+```bash
+rpicam-vid -t 0 --width 640 --height 480 --framerate 60 --bitrate 400000 --profile baseline --inline --intra 60 --flush -o - | nc -u 192.168.100.20 1337
+```
+
+
+On reflash la rpi compute module 4 avec un Raspberry Pi OS (Lite) 64-bit pour avoir les derniers software et surtout éviter d'avoir une UI.
+```bash
+sudo apt update && sudo apt install -y gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+
+sudo apt update && sudo apt install -y gstreamer1.0-libav
+```
+
+100 a 120 ms aussi rpi to rpi via ethernet mais l'image est sacadée et de moins bonne qualité que sur mon pc.
+RX :
+```bash
+sudo nice -n -20 gst-launch-1.0 -v udpsrc port=1337 buffer-size=0 ! h264parse disable-passthrough=true config-interval=-1 ! queue max-size-buffers=1 leaky=downstream ! avdec_h264 ! videoconvert ! kmssink sync=false async=false max-lateness=0
+```
+TX :
+```bash
+rpicam-vid -t 0 --width 640 --height 480 --framerate 60 --bitrate 400000 --profile baseline --inline --intra 60 --flush -o - | gst-launch-1.0 -e fdsrc fd=0 ! "videox-h264,stream-format=byte-stream" ! udpsink host=192.168.100.20 port=1337 sync=false async=false
+```
+
+tentative de controle du décodeur matériel
+```bash
+tb26@rpivrx:~ $ sudo apt install -y v4l-utils
+tb26@rpivrx:~ $ v4l2-ctl --list-devices
+bcm2835-codec-decode (platform:bcm2835-codec):
+        /dev/video10
+        /dev/video11
+        /dev/video12
+        /dev/video18
+        /dev/video31
+
+bcm2835-isp (platform:bcm2835-isp):
+        /dev/video13
+        /dev/video14
+        /dev/video15
+        /dev/video16
+        /dev/video20
+        /dev/video21
+        /dev/video22
+        /dev/video23
+        /dev/media0
+        /dev/media1
+
+rpi-hevc-dec (platform:rpi-hevc-dec):
+        /dev/video19
+        /dev/media3
+
+bcm2835-codec (vchiq:bcm2835-codec):
+        /dev/media2
+tb26@rpivrx:~ $ sudo v4l2-ctl -d /dev/video10 --set-ctrl=low_latency_mode=1
+unknown control 'low_latency_mode'
+tb26@rpivrx:~ $ sudo v4l2-ctl -d /dev/video10 --set-ctrl=num_capture_buffers=1
+unknown control 'num_capture_buffers'
+tb26@rpivrx:~ $ v4l2-ctl -d /dev/video10 -l
+
+User Controls
+
+  min_number_of_capture_buffers 0x00980927 (int)    : min=1 max=1 step=1 default=1 value=1 flags=read-only
+
+Codec Controls
+
+                     h264_level 0x00990a67 (menu)   : min=0 max=15 default=11 value=11 (4) flags=read-only
+                   h264_profile 0x00990a6b (menu)   : min=0 max=4 default=4 value=4 (High) flags=read-only
+tb26@rpivrx:~ $
+```
+
+toujours 100 a 120 ms... et extrémement dégradé
+
+fixe de la dégardation!!!
+```bash
+sudo nice -n -20 gst-launch-1.0 -v udpsrc port=1337 buffer-size=0 ! h264parse disable-passthrough=true config-interval=-1 ! queue max-size-buffers=1 leaky=downstream ! avdec_h264 max-threads=4 ! videoconvert ! fbdevsink sync=false async=false
+```
+### Vendredi 29.05
+maj de Qopenhd avec antigravity (recup log) ca marche mais c est pas plus rapide. 
+### Dimanche 31.05
+Mise en place  de https://github.com/kig/raspivid_mjpeg_server/blob/master/README.md pas mal en Ethernet on peux déscendre a 60ms
+
+TX:
+```bash
+rpicam-vid -t 0 -n -o - --width 480 --height 360 --framerate 120 --codec mjpeg --denoise off --exposure sport --quality 30 | ./target/release/raspivid_mjpeg_server --port 8554
+```
+
+RX:
+```bash
+gst-launch-1.0 -v souphttpsrc location=http://192.168.100.20:8554/video.mjpg do-timestamp=true ! multipartdemux ! image/jpeg,width=480,height=360 ! identity silent=false ! jpegdec ! queue max-size-buffers=1 leaky=downstream ! videoconvert ! autovideosink sync=false
+```
+
+et générer ca avec gemini, pas encore tester...
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev0.0"
+#define GPIO_PIN 24
+
+// On utilise un buffer de lecture assez grand pour stocker une image JPEG entière (~30-50 Ko max à cette résolution)
+#define RING_BUFFER_SIZE (1024 * 64) 
+
+volatile unsigned *gpio;
+
+// Initialisation du GPIO 24
+void setup_gpiomem() {
+    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
+    gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
+    close(mem_fd);
+    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en entree
+}
+
+// Fonction pour attendre que le STM32 soit prêt (Handshake matériel)
+int wait_for_stm32() {
+    int timeout_counter = 0;
+    while ((* (gpio + 13) & (1 << GPIO_PIN)) == 0) {
+        timeout_counter++;
+        if (timeout_counter > 50000) {
+            return 0; // Le STM32 sature, timeout
+        }
+    }
+    return 1; // STM32 prêt
+}
+
+int main() {
+    int spi_fd, sock_fd;
+    uint32_t speed = 5000000; // 5 MHz
+    uint8_t bits = 8;
+    uint32_t mode = 0;
+
+    setup_gpiomem();
+
+    // 1. Ouverture du bus SPI
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) { perror("SPI open"); return 1; }
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+    // 2. Connexion au serveur local Rust raspivid_mjpeg_server
+    sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock_fd < 0) { perror("Socket creation failed"); return 1; }
+
+    struct sockaddr_family;
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(8554);
+    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    printf(">>> Connexion au serveur MJPEG local sur le port 8554...\n");
+    if (connect(sock_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        perror("Connexion impossible au serveur Rust. Lance-le d'abord !");
+        return 1;
+    }
+
+    // Envoi de la requête HTTP standard pour démarrer le flux vidéo
+    const char *http_request = "GET /video.mjpg HTTP/1.1\r\nHost: 127.0.0.1:8554\r\nConnection: keep-alive\r\n\r\n";
+    send(sock_fd, http_request, strlen(http_request), 0);
+
+    uint8_t spi_buffer[CHUNK_SIZE];
+    uint8_t *recv_buf = malloc(RING_BUFFER_SIZE);
+    size_t recv_len = 0;
+    int drop_counter = 0;
+
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (uint64_t)(uintptr_t)spi_buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+        .cs_change = 0,
+    };
+
+    printf(">>> Extraction des trames JPEG et routage SPI actifs\n");
+
+    while (1) {
+        // Lecture des octets bruts arrivant du réseau TCP local
+        int n = recv(sock_fd, recv_buf + recv_len, RING_BUFFER_SIZE - recv_len, 0);
+        if (n <= 0) {
+            perror("Connexion serveur perdue");
+            break;
+        }
+        recv_len += n;
+
+        // Analyse du buffer pour extraire les images JPEG pures
+        while (recv_len > 4) {
+            int start_idx = -1;
+            int end_idx = -1;
+
+            // 3. Recherche du marqueur de début JPEG (0xFF 0xD8)
+            for (size_t i = 0; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD8) {
+                    start_idx = i;
+                    break;
+                }
+            }
+
+            if (start_idx == -1) {
+                // Pas de début d'image trouvé, on vide le buffer pour ne pas saturer
+                recv_len = 0;
+                break;
+            }
+
+            // 4. Recherche du marqueur de fin JPEG (0xFF 0xD9) à partir de start_idx
+            for (size_t i = start_idx; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD9) {
+                    end_idx = i + 1; // On inclut le 0xD9
+                    break;
+                }
+            }
+
+            // Si on a trouvé le début ET la fin, on a une image JPEG complète isolée !
+            if (start_idx != -1 && end_idx != -1) {
+                size_t jpeg_size = end_idx - start_idx + 1;
+                uint8_t *jpeg_ptr = recv_buf + start_idx;
+
+                // 5. Découpage et envoi de cette image JPEG par morceaux de 1400 octets sur le SPI
+                size_t bytes_sent = 0;
+                while (bytes_sent < jpeg_size) {
+                    size_t to_send = jpeg_size - bytes_sent;
+                    if (to_send > CHUNK_SIZE) {
+                        to_send = CHUNK_SIZE;
+                    }
+
+                    // On copie la portion d'image dans le buffer SPI
+                    memcpy(spi_buffer, jpeg_ptr + bytes_sent, to_send);
+                    
+                    // Si c'est le dernier morceau et qu'il est plus petit que 1400, on le bourre de 0 (padding)
+                    if (to_send < CHUNK_SIZE) {
+                        memset(spi_buffer + to_send, 0, CHUNK_SIZE - to_send);
+                    }
+
+                    // Gestion du Handshake avec le STM32U5
+                    if (wait_for_stm32()) {
+                        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) {
+                            perror("Erreur transmission SPI");
+                            break;
+                        }
+                        drop_counter = 0;
+                    } else {
+                        // Le STM32 ou la liaison radio HaLow sature
+                        drop_counter++;
+                        if (drop_counter == 1 || drop_counter % 120 == 0) {
+                            printf("[ATTENTION] Saturation Radio/STM32 : Image sautée (%d paquets jetés)\n", drop_counter);
+                        }
+                        // Politique Leaky : si le STM32 sature sur un morceau, on avorte l'envoi de cette image
+                        break; 
+                    }
+
+                    bytes_sent += to_send;
+                }
+
+                // On nettoie les données traitées dans notre buffer de réception et on décale le reste
+                size_t remaining = recv_len - (end_idx + 1);
+                memmove(recv_buf, recv_buf + end_idx + 1, remaining);
+                recv_len = remaining;
+            } else {
+                // On a le début mais pas encore la fin (l'image est en cours de téléchargement), on sort de la boucle interne
+                break;
+            }
+        }
+    }
+
+    free(recv_buf);
+    close(sock_fd);
+    close(spi_fd);
+    return 0;
+}
+```
 
 ## Juin
+
 ## Juillet
 
 ### Jeudi 23.07 avant 11h00
