@@ -408,7 +408,7 @@ Voici la mise à jour complète de ton journal de travail pour la période de d�
 
 ```mermaid
 gantt
-    title Planning 450h (Mis à jour le 05/06)
+    title Planning 450h (Historique conservé & Mis à jour le 05/06)
     dateFormat  YYYY-MM-DD
     axisFormat  %d/%m
 
@@ -431,9 +431,10 @@ gantt
     Validation débit UDP (1.34 Mbps) :done,milestone ,2026-03-22, 0d
     Interface Encodeur Vidéo (Jetson) :done, tx4, 2026-03-25, 2026-03-29
     Contrôle de flux matériel (Handshake GPIO) :done, tx4b, 2026-03-28, 2026-03-29
-    Migration Pipeline Vidéo (H.264 -> MJPEG) :done, tx5, 2026-03-30, 2026-05-15
-    Optimisation QoS WMM, EDCA & Unicast (STM32) :done, tx5b, 2026-05-16, 2026-06-05
-    Suppression Bufferbloat & Stream Socket Pur :active, tx5c, 2026-06-05, 2026-06-14
+    Opti gstreamer, jitter et range, sur jetson :done, tx5, 2026-03-29, 2026-05-10
+    Migration Pipeline Vidéo (H.264 -> MJPEG) :done, tx6, 2026-05-10, 2026-05-20
+    Optimisation QoS WMM, EDCA & Unicast (STM32) :done, tx7, 2026-05-16, 2026-06-05
+    Suppression Bufferbloat & Stream Socket Pur :active, tx8, 2026-06-05, 2026-06-14
 
     section RX (OpenWrt & PC & RPI4)
     Désactivation Chiffrement & Monitor Mode :done, rx1, 2026-03-01, 2026-03-06
@@ -441,15 +442,15 @@ gantt
     Tunnel Réseau (tcpdump, Netcat, TCP) :done, rx3, 2026-03-20, 2026-03-24
     Scripting d'analyse (Python/Wireshark) :done, rx4, 2026-03-24, 2026-03-30
     Pontage Réseau (Bridge) :done, rx4b, 2026-03-26, 2026-03-28
-    Implémentation Pipeline Vidéo H.264 (PC) :done, rx5, 2026-03-27, 2026-03-29
-    Validation MVP H.264 (Latence ~200ms) :done,milestone, 2026-03-29, 0d
-    Intégration Parseur JPEG & Reconstruction UDP :done, rx6, 2026-05-10, 2026-06-05
-    Lock Latence Cible FPV (<100ms) :done,milestone, 2026-06-05, 0d
-    Ajustement Réception GStreamer Non-Bloquante :active, rx7, 2026-06-05, 2026-06-14
-
+    Implémentation Pipeline Vidéo (PC) :done, rx5, 2026-03-27, 2026-03-29
+    Validation MVP (Latence ~200ms) :done,milestone, 2026-03-29, 0d
+    Optimisation Latence & GStreamer :done, rx6, 2026-03-30, 2026-05-15
+    Intégration Parseur JPEG & Reconstruction UDP :done, rx7, 2026-05-15, 2026-06-05
+    Lock Latence Cible FPV (70-100ms) :done,milestone, 2026-06-05, 0d
+    Ajustement Réception GStreamer Non-Bloquante :active, rx8, 2026-06-05, 2026-06-14
 
     section Post-Semestre (40h/sem)
-    Optimisations finales & Intégration Châssis :crit, int1, 2026-06-15, 2026-07-08
+    Optimisations finales :crit, int1, 2026-06-15, 2026-07-08
     Tests Terrain Finaux (Portée, Obstacles & NLOS) :int2, 2026-07-08, 2026-07-23
     Préparation Défense               :int3, 2026-07-16, 2026-07-23
 
@@ -460,12 +461,11 @@ gantt
     CDC revalidé             :done, milestone ,2026-03-27, 0d
     Journal de travail       :active, doc3, 2026-02-16, 2026-07-23
     Rapport - Intro & Faisabilité :done,doc4, 2026-02-27, 2026-03-21
-    Rapport - Architecture Système & Protocoles :done,doc4b, 2026-03-29, 2026-05-20
-    Rendu intermédiaire      :done, milestone ,2026-05-20, 0d
-    Rapport - Réalisation, QoS & Mesures :active,doc5, 2026-05-21, 2026-07-10
+    Rapport - Architecture Système :done,doc4b, 2026-03-29, 2026-05-10
+    Rendu intermédiaire         :done,milestone ,2026-05-20, 0d
+    Rapport - Réalisation & Mesures :active,doc5, 2026-05-11, 2026-07-10
     Finalisation & Mise en page :doc6, 2026-07-11, 2026-07-23
     Rendu final                 :milestone ,2026-07-23, 0d
-
 ```
 
 ## Juillet
