@@ -2359,7 +2359,7 @@ nice -n -20 gst-launch-1.0 -v udpsrc address=0.0.0.0 port=1337 buffer-size=0 ! "
 ```
 vérifier la commande.
 ### Mecredi 20.05 15h00
-
+**Rendu intermédiaire**
 ### Vendredi 22.05
 
 fait de nouveau test avec le bouton. la latence pour un burst de 100 packets était entre 500 et 1000 ms donc entre 5 et 10ms par packets,excellent.
@@ -2462,7 +2462,6 @@ RX:
 gst-launch-1.0 -v souphttpsrc location=http://192.168.100.20:8554/video.mjpg do-timestamp=true ! multipartdemux ! image/jpeg,width=480,height=360 ! identity silent=false ! jpegdec ! queue max-size-buffers=1 leaky=downstream ! videoconvert ! autovideosink sync=false
 ```
 
-et générer ca avec gemini, pas encore tester...
 ```c
 #include <stdio.h>
 #include <stdlib.h>
@@ -2655,6 +2654,291 @@ int main() {
 ```
 
 ## Juin
+
+### Vendredi 05.06
+
+1. **Correction du "Slicing" (Image grise à 90%) en UDP :**
+* *Problème :* Contrairement au TCP qui gère un flux continu, l'UDP fragmente le JPEG. GStreamer essayait de décoder chaque paquet de 1400 octets comme une image entière, plantait à la fin du premier chunk, et remplissait le reste de gris. De plus, le "padding" avec des `0x00` pour combler le dernier morceau corrompait le décodeur.
+* *Solution :* Remplacement du padding par une répétition du marqueur de fin JPEG (`0xFF 0xD9`) dans le code C. Ajout de l'élément `jpegparse` dans la commande GStreamer de réception pour forcer l'assemblage complet du datagramme avant de l'envoyer au décodeur.
+
+
+2. **Contournement du goulot d'étranglement réseau (DTIM) :**
+* *Problème :* En mode *Broadcast*, le routeur stocke les paquets en mémoire et attend le signal de réveil réseau (DTIM) pour les envoyer à vitesse réduite (Basic Rate). Cela générait une latence artificielle.
+* *Solution :* Passage en **Unicast** (ciblage direct de l'IP de réception). Le routeur transmet instantanément les trames. En l'occurance j'ai gagner pret de 40ms.
+
+
+3. **Hack de la Qualité de Service (QoS WMM / EDCA) sur le STM32 :**
+* Pour éviter que les acquittements matériels (MAC ACKs) liés à l'Unicast ne fassent chuter la bande passante, le trafic LwIP a été marqué en haute priorité (`pcb->tos = 0xC0` - Voice).
+* Paramétrage bas niveau de la puce Morse Micro (`mmwlan_set_default_qos_queue_params`) pour forcer un accès au canal quasi-immédiat (`AIFS = 2`, `CW_min = 1`). Le STM32 "écrase" le reste du trafic réseau pour imposer le flux vidéo.
+
+
+4. **Optimisation matérielle de l'ISP (Raspberry Pi) :**
+* Utilisation du Supersampling matériel de l'IMX219 : L'ISP capture en 640x480 (SBGGR10) et fait un *downscale* matériel en 320x240. Le bruit numérique est lissé, ce qui réduit drastiquement la taille du fichier MJPEG sans impacter la netteté.
+* Gel des algorithmes de traitement (AWB, Exposition) pour garantir un temps de calcul de l'ISP strictement déterministe. Ajout de l'argument `--flush` pour empêcher Linux de faire de la rétention de buffer dans le pipe `|`.
+
+**Résultat actuel :** Un flux vidéo en 320x240 à 60 FPS, avec une latence stable autour de 80-90 ms (pics min à 70 ms et max à 100). *Note : une légère accumulation de paquets survient si l'image reste statique trop longtemps (bufferbloat lié au débit variable du MJPEG).*
+
+#### Commandes de test actuelles (Stables)
+
+**RX (PC) :**
+
+```bash
+./gst-launch-1.0 -v udpsrc port=1337 do-timestamp=true ! jpegparse ! jpegdec ! queue max-size-buffers=1 leaky=downstream ! videoconvert ! autovideosink sync=false
+```
+
+**TX (Raspberry Pi - Capture & Pipe) :**
+
+```bash
+rpicam-vid -t 0 -n -o - --width 320 --height 240 --framerate 60 --codec mjpeg --denoise off --exposure sport --metering centre --awb daylight --quality 10 --flush | ./target/release/raspivid_mjpeg_server --port 8554
+```
+
+---
+
+#### État de l'envoie sur le SPI
+
+*Fichier : `gateway_spi.c*`
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev0.0"
+#define GPIO_PIN 24
+#define RING_BUFFER_SIZE (1024 * 64) 
+
+volatile unsigned *gpio;
+
+void setup_gpiomem() {
+    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
+    gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
+    close(mem_fd);
+    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en entree
+}
+
+int wait_for_stm32() {
+    int timeout_counter = 0;
+    while ((* (gpio + 13) & (1 << GPIO_PIN)) == 0) {
+        timeout_counter++;
+        if (timeout_counter > 50000) { return 0; }
+    }
+    return 1;
+}
+
+int main() {
+    int spi_fd, sock_fd;
+    uint32_t speed = 5000000; // 5 MHz
+    uint8_t bits = 8;
+    uint32_t mode = 0;
+
+    setup_gpiomem();
+
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) { perror("SPI open"); return 1; }
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+    sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock_fd < 0) { perror("Socket failed"); return 1; }
+
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(8554);
+    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    printf(">>> Connexion au serveur MJPEG local sur le port 8554...\n");
+    if (connect(sock_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        perror("Connexion impossible au serveur Rust. Lance-le d'abord !");
+        return 1;
+    }
+
+    const char *http_request = "GET /video.mjpg HTTP/1.1\r\nHost: 127.0.0.1:8554\r\nConnection: keep-alive\r\n\r\n";
+    send(sock_fd, http_request, strlen(http_request), 0);
+
+    uint8_t spi_buffer[CHUNK_SIZE];
+    uint8_t *recv_buf = malloc(RING_BUFFER_SIZE);
+    size_t recv_len = 0;
+    int drop_counter = 0;
+
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (uint64_t)(uintptr_t)spi_buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+        .cs_change = 0,
+    };
+
+    printf(">>> Extraction des trames JPEG et routage SPI actifs\n");
+
+    while (1) {
+        int n = recv(sock_fd, recv_buf + recv_len, RING_BUFFER_SIZE - recv_len, 0);
+        if (n <= 0) break;
+        recv_len += n;
+
+        while (recv_len > 4) {
+            int start_idx = -1;
+            int end_idx = -1;
+
+            for (size_t i = 0; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD8) { start_idx = i; break; }
+            }
+            if (start_idx == -1) { recv_len = 0; break; }
+
+            for (size_t i = start_idx; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD9) { end_idx = i + 1; break; }
+            }
+
+            if (start_idx != -1 && end_idx != -1) {
+                size_t jpeg_size = end_idx - start_idx + 1;
+                uint8_t *jpeg_ptr = recv_buf + start_idx;
+                size_t bytes_sent = 0;
+
+                while (bytes_sent < jpeg_size) {
+                    size_t to_send = jpeg_size - bytes_sent;
+                    if (to_send > CHUNK_SIZE) to_send = CHUNK_SIZE;
+
+                    memcpy(spi_buffer, jpeg_ptr + bytes_sent, to_send);
+
+                    // Padding avec le marqueur de fin JPEG (Évite le crash GStreamer)
+                    if (to_send < CHUNK_SIZE) {
+                        for (size_t k = to_send; k < CHUNK_SIZE - 1; k += 2) {
+                            spi_buffer[k] = 0xFF;
+                            spi_buffer[k+1] = 0xD9;
+                        }
+                    }
+
+                    if (wait_for_stm32()) {
+                        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) break;
+                        drop_counter = 0;
+                    } else {
+                        drop_counter++;
+                        if (drop_counter == 1 || drop_counter % 120 == 0) {
+                            printf("[ATTENTION] Saturation STM32 (%d paquets jetés)\n", drop_counter);
+                        }
+                        break; 
+                    }
+                    bytes_sent += to_send;
+                }
+
+                size_t remaining = recv_len - (end_idx + 1);
+                memmove(recv_buf, recv_buf + end_idx + 1, remaining);
+                recv_len = remaining;
+            } else {
+                break;
+            }
+        }
+    }
+    free(recv_buf); close(sock_fd); close(spi_fd);
+    return 0;
+}
+
+```
+
+
+#### État du Firmware
+
+*Extrait des fonctions réseaux et hardware (`app_init` et tx_start)*
+
+```c
+static void udp_broadcast_tx_start(struct udp_pcb *pcb)
+{
+    ip_set_option(pcb, SOF_BROADCAST);
+    ip_addr_t dest_ip;
+    IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 10); // Adresse UNICAST du Récepteur
+
+    // Activation DWT pour profilage
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+    printf(">>> PONT SPI-WIFI ACTIVE ! En attente de la Rpi... <<<\n");
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+    uint32_t packet_counter = 0;
+    
+    while (1) {
+        if (spi_packet_received) {
+            struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, SPI_PAYLOAD_SIZE, PBUF_REF);
+            if (p != NULL) {
+                p->payload = (void *)spi_rx_buffer;
+                LOCK_TCPIP_CORE();
+                udp_sendto(pcb, p, &dest_ip, 1337);
+                UNLOCK_TCPIP_CORE();
+                pbuf_free(p);
+            }
+
+            dwt_end = DWT->CYCCNT;
+            mcu_cycles = dwt_end - dwt_start;
+
+            if ((packet_counter++ % 100) == 0) {
+                uint32_t freq_mhz = SystemCoreClock / 1000000;
+                uint32_t time_us = mcu_cycles / freq_mhz;
+                printf("[Profilage] Temps de traitement MCU : %lu us (%lu cycles)\n", time_us, mcu_cycles);
+            }
+
+            spi_packet_received = false;
+            HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+            HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+        }
+    }
+}
+
+void app_init(void)
+{
+    printf("\n\n--- PIPELINE JETSON -> STM32 -> WIFI ---\n\n");
+    SPI_Slave_Init();
+    HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+
+    // Configuration QoS pour le FPV
+    struct mmwlan_qos_queue_params fpv_qos = {
+        .aci = 3,         // ACI 3 = Voice (Correspond au TOS 0xC0 de LwIP)
+        .aifs = 2,        // Temps d'attente inter-trame minimum
+        .cw_min = 1,      // Fenêtre de contention quasi-nulle
+        .cw_max = 1,      // En cas de collision, relance immédiate
+        .txop_max_us = 0  // Désactivé pour paquets fluides
+    };
+
+    mmwlan_set_default_qos_queue_params(&fpv_qos, 1);
+    app_wlan_init();
+    mmipal_set_link_status_callback(link_status_callback);
+
+    printf("Connexion a l'AP OpenWrt en cours...\n");
+    app_wlan_start();
+
+    // Forçage HaLow en MCS 4 / 8MHz
+    mmwlan_ate_override_rate_control(MMWLAN_MCS_4, MMWLAN_BW_8MHZ, MMWLAN_GI_NONE);
+    printf("Forcage OK : 8 MHz / MCS 4.\n");
+    mmwlan_set_power_save_mode(MMWLAN_PS_DISABLED);
+
+    while (!is_network_ready) {
+        mmosal_task_sleep(10);
+    }
+
+    struct udp_pcb *pcb = init_udp_pcb();
+    if (pcb != NULL) {
+        pcb->tos = 0xC0; // Priorité Voice pour le marquage IP
+        udp_broadcast_tx_start(pcb);
+    }
+    
+    (void)get_mode;
+    (void)udp_broadcast_rx_start;
+}
+
+```
+
 
 ## Juillet
 

@@ -392,7 +392,82 @@ gantt
 ### Mecredi 20.05 15h00
 **Rendu intermédiaire**
 
+Voici la mise à jour complète de ton journal de travail pour la période de début juin. J'ai intégré tes avancées techniques majeures (résolution du bug GStreamer, passage en Unicast, optimisation de la QoS EDCA sur le STM32, et Supersampling imx219) et généré la nouvelle version du diagramme de Gantt actualisée au vendredi 05.06, reflétant le passage au format MJPEG et le déblocage de la latence cible sous les 100 ms.
+
+---
+
 ## Juin
+
+### Vendredi 05.06
+
+* **Résolution du bug d'affichage UDP avec MJPEG (Slicing & Trame grise) :** Remplacement du padding de zéros (`0x00`) — qui provoquait des erreurs de syntaxe fatales sur le décodeur — par une duplication du marqueur de fin de fichier JPEG (`0xFF 0xD9`) et Ajout du composant `jpegparse` dans le pipeline GStreamer au sol pour reconstruire proprement les datagrammes fragmentés.
+* **Optimisation drastique de la latence réseau :** Abandon du mode *Broadcast* (sujet à la rétention DTIM du routeur et bridé au débit minimal) au profit d'un routage direct en **Unicast** vers l'IP du récepteur.
+* **Hack de la couche MAC 802.11e (QoS EDCA) sur le STM32 :** Marquage du socket LwIP en priorité critique (`pcb->tos = 0xC0` - Voice / TID 7) et forçage des registres de la puce Morse Micro pour écraser les temps de courtoisie Wi-Fi standards (`AIFS = 2`, `CW_min = 1`, `CW_max = 1`). Le drone s'approprie le canal RF et transmet sans retransmissions agressives (politique proche du No-ACK).
+* **Supersampling matériel (imx219) & Alignement de flux :** Configuration de l'ISP pour capturer en 640x480 (SBGGR10) avec un *downscale* matériel en 320x240 @ 60 FPS. Le lissage du bruit numérique réduit le poids VBR des fichiers JPEG. Gel de la balance des blancs (`--awb daylight`) et de l'exposition pour assurer un preprocessing déterministe. Activation de l'option `--flush` pour éliminer la rétention de buffer de Linux.
+* **Bilan des mesures :** Succès de l'architecture. Latence *Glass-to-Glass* avec un flux vidéo en 320x240 à 60 FPS et une latence stable autour de 80-90 ms (pics min à 70 ms et max à 100)
+
+```mermaid
+gantt
+    title Planning 450h (Mis à jour le 05/06)
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d/%m
+
+    excludes 2026-03-09,2026-03-10,2026-03-11,2026-03-12,2026-03-13,2026-04-06,2026-04-07,2026-04-08,2026-04-09,2026-04-10
+    
+    section Indisponible
+    Crunch      :2026-03-09, 2026-03-14
+    Vacances    :2026-04-06, 2026-04-11
+
+    section Initialisation & Faisabilité
+    Faisabilité Driver :done, p1, 2026-02-16, 2026-02-28
+    Setup SDK MM       :done, p2, 2026-03-01, 2026-03-06
+    Recherche param SDK & Test flash EKH05 :done, p3, 2026-03-06, 2026-03-20
+    Test flash ekh05         :done,milestone ,2026-03-18, 0d
+
+    section TX (FreeRTOS)
+    Architecture UDP Broadcast :done, tx1, 2026-03-20, 2026-03-24
+    Packet de test & Burst LwIP :done, tx2, 2026-03-20, 2026-03-24
+    Forçage PHY (MCS 2, 2MHz) :done, tx3, 2026-03-20, 2026-03-24
+    Validation débit UDP (1.34 Mbps) :done,milestone ,2026-03-22, 0d
+    Interface Encodeur Vidéo (Jetson) :done, tx4, 2026-03-25, 2026-03-29
+    Contrôle de flux matériel (Handshake GPIO) :done, tx4b, 2026-03-28, 2026-03-29
+    Migration Pipeline Vidéo (H.264 -> MJPEG) :done, tx5, 2026-03-30, 2026-05-15
+    Optimisation QoS WMM, EDCA & Unicast (STM32) :done, tx5b, 2026-05-16, 2026-06-05
+    Suppression Bufferbloat & Stream Socket Pur :active, tx5c, 2026-06-05, 2026-06-14
+
+    section RX (OpenWrt & PC & RPI4)
+    Désactivation Chiffrement & Monitor Mode :done, rx1, 2026-03-01, 2026-03-06
+    Désactivation Chiffrement mais mode AP ouvert:done, rx2, 2026-03-20, 2026-03-24
+    Tunnel Réseau (tcpdump, Netcat, TCP) :done, rx3, 2026-03-20, 2026-03-24
+    Scripting d'analyse (Python/Wireshark) :done, rx4, 2026-03-24, 2026-03-30
+    Pontage Réseau (Bridge) :done, rx4b, 2026-03-26, 2026-03-28
+    Implémentation Pipeline Vidéo H.264 (PC) :done, rx5, 2026-03-27, 2026-03-29
+    Validation MVP H.264 (Latence ~200ms) :done,milestone, 2026-03-29, 0d
+    Intégration Parseur JPEG & Reconstruction UDP :done, rx6, 2026-05-10, 2026-06-05
+    Lock Latence Cible FPV (<100ms) :done,milestone, 2026-06-05, 0d
+    Ajustement Réception GStreamer Non-Bloquante :active, rx7, 2026-06-05, 2026-06-14
+
+
+    section Post-Semestre (40h/sem)
+    Optimisations finales & Intégration Châssis :crit, int1, 2026-06-15, 2026-07-08
+    Tests Terrain Finaux (Portée, Obstacles & NLOS) :int2, 2026-07-08, 2026-07-23
+    Préparation Défense               :int3, 2026-07-16, 2026-07-23
+
+    section Documentation
+    Rédaction du CDC         :done, doc1, 2026-02-16, 2026-03-09
+    CDC validé               :done, milestone ,2026-03-09, 0d
+    correction détail CDC    :done, doc2, 2026-03-24, 1d
+    CDC revalidé             :done, milestone ,2026-03-27, 0d
+    Journal de travail       :active, doc3, 2026-02-16, 2026-07-23
+    Rapport - Intro & Faisabilité :done,doc4, 2026-02-27, 2026-03-21
+    Rapport - Architecture Système & Protocoles :done,doc4b, 2026-03-29, 2026-05-20
+    Rendu intermédiaire      :done, milestone ,2026-05-20, 0d
+    Rapport - Réalisation, QoS & Mesures :active,doc5, 2026-05-21, 2026-07-10
+    Finalisation & Mise en page :doc6, 2026-07-11, 2026-07-23
+    Rendu final                 :milestone ,2026-07-23, 0d
+
+```
+
 ## Juillet
 
 ### Jeudi 23.07 avant 11h00
