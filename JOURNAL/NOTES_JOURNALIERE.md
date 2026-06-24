@@ -2938,6 +2938,1089 @@ void app_init(void)
 }
 
 ```
+### Vendredi 12.06
+todo:
+* virer le server http mjpeg, DONE
+gateway_spi_noserv.c :
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+#include <sys/mman.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev0.0"
+#define GPIO_PIN 24
+#define RING_BUFFER_SIZE (1024 * 64) 
+
+volatile unsigned *gpio;
+
+void setup_gpiomem() {
+    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
+    gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
+    close(mem_fd);
+    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en entree
+}
+
+int wait_for_stm32() {
+    int timeout_counter = 0;
+    while ((* (gpio + 13) & (1 << GPIO_PIN)) == 0) {
+        timeout_counter++;
+        if (timeout_counter > 50000) { return 0; }
+    }
+    return 1;
+}
+
+int main() {
+    int spi_fd;
+    FILE *cam_pipe;
+    int pipe_fd;
+    uint32_t speed = 5000000; // 5 MHz
+    uint8_t bits = 8;
+    uint32_t mode = 0;
+
+    setup_gpiomem();
+
+    // 1. Ouverture du bus SPI
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) { perror("SPI open"); return 1; }
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+    // 2. Lancement direct de rpicam-vid via un Pipe anonyme
+    // On garde exactement tes paramètres optimisés de capture
+    const char *cmd = "rpicam-vid -t 0 -n -o - --width 320 --height 240 --framerate 60 "
+                      "--codec mjpeg --denoise off --exposure sport --metering centre "
+                      "--awb daylight --quality 10 --flush";
+
+    printf(">>> Lancement de la capture caméra directe...\n");
+    cam_pipe = popen(cmd, "r");
+    if (!cam_pipe) {
+        perror("Échec du lancement de rpicam-vid");
+        close(spi_fd);
+        return 1;
+    }
+
+    // Extraction du descripteur de fichier pour appliquer le mode NON-BLOQUANT
+    pipe_fd = fileno(cam_pipe);
+    int flags = fcntl(pipe_fd, F_GETFL, 0);
+    fcntl(pipe_fd, F_SETFL, flags | O_NONBLOCK);
+
+    uint8_t spi_buffer[CHUNK_SIZE];
+    uint8_t *recv_buf = malloc(RING_BUFFER_SIZE);
+    size_t recv_len = 0;
+    int drop_counter = 0;
+
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (uint64_t)(uintptr_t)spi_buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+        .cs_change = 0,
+    };
+
+    printf(">>> Extraction des trames JPEG et routage SPI actifs (Mode Direct)\n");
+
+    while (1) {
+        // Lecture non-bloquante du flux standard de la caméra
+        int n = read(pipe_fd, recv_buf + recv_len, RING_BUFFER_SIZE - recv_len);
+        
+        if (n < 0) {
+            // Le buffer est vide pour le moment, on laisse respirer le CPU et on recommence
+            usleep(1000); 
+            continue;
+        }
+        if (n == 0) {
+            printf("Flux caméra interrompu.\n");
+            break;
+        }
+        recv_len += n;
+
+        while (recv_len > 4) {
+            int start_idx = -1;
+            int end_idx = -1;
+
+            // Recherche du marqueur de début JPEG (0xFF 0xD8)
+            for (size_t i = 0; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD8) { start_idx = i; break; }
+            }
+            if (start_idx == -1) { recv_len = 0; break; }
+
+            // Recherche du marqueur de fin JPEG (0xFF 0xD9)
+            for (size_t i = start_idx; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD9) { end_idx = i + 1; break; }
+            }
+
+            // Si image complète isolée
+            if (start_idx != -1 && end_idx != -1) {
+                size_t jpeg_size = end_idx - start_idx + 1;
+                uint8_t *jpeg_ptr = recv_buf + start_idx;
+                size_t bytes_sent = 0;
+
+                while (bytes_sent < jpeg_size) {
+                    size_t to_send = jpeg_size - bytes_sent;
+                    if (to_send > CHUNK_SIZE) to_send = CHUNK_SIZE;
+
+                    memcpy(spi_buffer, jpeg_ptr + bytes_sent, to_send);
+
+                    // Padding avec le marqueur de fin JPEG (Évite le crash GStreamer)
+                    if (to_send < CHUNK_SIZE) {
+                        for (size_t k = to_send; k < CHUNK_SIZE - 1; k += 2) {
+                            spi_buffer[k] = 0xFF;
+                            spi_buffer[k+1] = 0xD9;
+                        }
+                    }
+
+                    if (wait_for_stm32()) {
+                        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) break;
+                        drop_counter = 0;
+                    } else {
+                        drop_counter++;
+                        if (drop_counter == 1 || drop_counter % 120 == 0) {
+                            printf("[ATTENTION] Saturation STM32 (%d paquets jetés)\n", drop_counter);
+                        }
+                        // Politique Leaky : abandon de la trame courante si timeout matériel
+                        break; 
+                    }
+                    bytes_sent += to_send;
+                }
+
+                size_t remaining = recv_len - (end_idx + 1);
+                memmove(recv_buf, recv_buf + end_idx + 1, remaining);
+                recv_len = remaining;
+            } else {
+                // Image incomplète en cours de lecture
+                break;
+            }
+        }
+    }
+
+    free(recv_buf);
+    pclose(cam_pipe);
+    close(spi_fd);
+    return 0;
+}
+```
+```bash
+gcc -O3 gateway_spi_noserv.c -o mjpeg_to_spi
+./mjpeg_to_spi
+```
+* flasher un os RT sur la rpi, nice 20, set la clock
+avant de flasher un os temps réel juste pour ca, on peut isoler un coeur et overclocker la rpi.
+
+#### 1. Figer la fréquence d'horloge (Overclock & Force Turbo)
+
+Pour éviter les micro-saccades induites par les changements de fréquences du CPU de la Raspberry Pi, on va forcer le processeur à tourner à sa fréquence maximale en permanence.
+
+Ouvrir le fichier de configuration de boot de la Pi :
+
+```bash
+sudo nano /boot/firmware/config.txt
+
+```
+On ajoute les lignes suivantes tout à la fin du fichier :
+
+```text
+# Forcer le CPU à sa fréquence maximale sans jamais redescendre
+force_turbo=1
+
+# Overclocking stable et sûr (optionnel mais recommandé avec ton ventirad)
+# Pour une RPi 4B : 2000 MHz (2.0 GHz) au lieu de 1.5 GHz
+arm_freq=2000
+over_voltage=6
+
+```
+
+
+-
+
+#### 2. Isoler un cœur CPU
+
+
+```bash
+sudo nano /boot/firmware/cmdline.txt
+
+```
+
+*(Sur une seule ligne, ne pas créer de retour à la ligne !)* Ajouter un espace à la toute fin du texte existant et insèrer ceci :
+
+```text
+isolcpus=3
+
+```
+```bash
+sudo reboot
+```
+
+---
+
+#### 3. Exécuter en priorité maximale sur le cœur isolé
+
+```bash
+sudo taskset -c 3 nice -n -20 ./mjpeg_to_spi
+```
+
+m2m
+### Lundi 15.06
+* Checker uStreamer, l'adapté avec antigravity pour cracher le mjpeg sur le spi.
+https://github.com/pikvm/ustreamer/blob/master/README.md
+
+Tentative de multithreading avec uStreamer, mais pas concluant. 
+```bash
+rsync -avz --exclude='.git' --exclude='*.o' ./ustreamer tb26@rpivtx.local:/home/tb26/ustreamer
+```
+gateway_spi_noserv.c + 
+```bash
+sudo taskset -c 3 nice -n -20 ./mjpeg_to_spi
+```
+semble donner les meilleurs résultats.
+plus qu'a flasher l'OS temps réel pour tenter de grater le temps réstant. 
+état actuel du système : 70ms-80ms (avec pic au et bas de 60-90)
+### Mardi 16.06
+https://developer.acontis.com/ethercat-downloads a été flashé, mais aucunne info sur comment s'y connecter (surement senser etre fait via picocom ou autre). donc ajoute d'un user pour avoir accès au SSH.(via une VM linux)
+
+#### 1. Montage de la partition système de la Pi
+
+Une fois la carte SD connectée à la VM Linux (repérée via `lsblk`, ici supposée être `/dev/sdb2`) :
+
+```bash
+# Création du point de montage et montage de la partition ext4
+sudo mkdir -p /mnt/rpi
+sudo mount /dev/sdb2 /mnt/rpi
+
+```
+
+#### 2. Création de l'utilisateur
+
+On déclare un user `tb26` et on lui attribue le mot de passe généré (`raspberry`) :
+
+* **Fichier `/mnt/rpi/etc/passwd`** (Ajouter tout à la fin) :
+```text
+tb26:x:1000:1000:,,,:/home/tb26:/bin/bash
+```
+
+* **Fichier `/mnt/rpi/etc/shadow`** (Ajouter tout à la fin) :
+```text
+tb26:$6$49p1Yw96wSg67A$w95vX.m.gHMc31M6p.hQ8M0Ypx1pXfB/D5vWb6eM1xI3S6C6L7A3N1d7R6p9b8w5Sg67A49p1Yw96wSg67A.:20221:0:99999:7:::
+
+```
+
+
+
+#### 3. Création du répertoire Home et droits associés
+
+```bash
+# Création du dossier personnel
+sudo mkdir -p /mnt/rpi/home/tb26
+
+# Attribution de la propriété à l'utilisateur (UID 1000, GID 1000)
+sudo chown -R 1000:1000 /mnt/rpi/home/tb26
+
+```
+
+#### 4. Configuration d'OpenSSH pour l'accès par Clé
+
+Comme l'authentification par mot de passe est verrouillée sur cette image, on injecte directement la clé publique SSH de notre PC Windows pour s'affranchir des mots de passe.
+
+```bash
+# 1. Création du dossier SSH pour le compte cible (ex: root)
+sudo mkdir -p /mnt/rpi/root/.ssh
+sudo chmod 700 /mnt/rpi/root/.ssh
+
+# 2. Injection de la clé publique Windows dans le fichier authorized_keys
+sudo nano /mnt/rpi/root/.ssh/authorized_keys
+# -> Y coller la ligne "ssh-rsa AAAA..." de ton Windows
+
+# 3. Application des permissions strictes requises par SSH
+sudo chmod 600 /mnt/rpi/root/.ssh/authorized_keys
+sudo chown -R root:root /mnt/rpi/root/.ssh
+
+```
+
+#### 5. Forçage des directives de sécurité SSH
+
+Dans le fichier de configuration principale d'OpenSSH (`/mnt/rpi/etc/ssh/sshd_config`), s'assurer que les lignes suivantes sont actives et décommentées :
+
+```text
+PermitRootLogin yes
+PubkeyAuthentication yes
+
+```
+
+#### 6. Clôture et démontage propre
+
+```bash
+# Libération de la carte SD pour éviter la corruption des données
+sudo umount /mnt/rpi
+
+```
+
+> **Rappel de connexion depuis Windows :**
+> ```powershell
+> ssh root@[fe80::ea6:9646:a621:da8f%12]   # Via câble Ethernet direct
+> ssh root@raspberrypi.local               # Via le réseau local (Wi-Fi/DHCP)
+> ```
+
+les perf sont pratiquement identique a la version ou on isolait manuellement un cpu et ou faisait taskset sur ce coeur.
+
+Un essaie a été effectuer avec le rpi PREEMPT et mon PC personnel en ground station (même commande que sur le laptop).
+Les résultats ont été très interessant la moyenne de latence se trouve entre 50 et 60ms les pics max et min sont dans les environs de 70 et 40ms. Le système est plus stable et la latence est donc déscendue de 10 a 20 ms ce qui est très bon. Cela confirme que la puissance de la ground station et le refresh rate de l'écran joue un rôle cruciale dans la réduction de la latences. (ici 165Hz contre 60 pour le laptop).
+
+
+### Vendredi 19.06
+
+* sdr -> mpeg ts, comparer le système mis en place avec le système Halow.
+* setup la debix a (pas de SD)
+* envoyer l'udp directe sans connection, si le temps le permet (surement impossible a cause des lib précompiler)
+
+
+2. **Sur la Raspberry Pi :** Attribue une IP fixe à l'interface Ethernet (`eth0`). Dans ton terminal Pi, tape :
+```bash
+sudo ip addr add 192.168.12.1/24 dev eth0
+sudo ip link set eth0 up
+
+```
+
+```bash
+sudo taskset -c 3 nice -n -20 rpicam-vid -t 0 -n -o udp://192.168.12.10:1337 --width 320 --height 240 --framerate 60 --codec mjpeg --quality 10 --flush
+
+```
+
+Côté PC:
+
+```powershell
+./gst-launch-1.0 -v udpsrc port=1337 buffer-size=1048576 do-timestamp=true ! jpegparse ! jpegdec ! queue max-size-buffers=1 leaky=downstream ! videoconvert ! autovideosink sync=false
+
+```
+
+connection a la BladeRF flash de l'image (depuis VM et depuis RPI) mais récéption de l'OFDM mauvaise. 
+
+### Dimanche 21.06
+
+déscativation de l'AMPDU, légère baisse du jitter.
+
+En temps normal, quand on télécharge un fichier ou qu'on regarde Netflix, le Wi-Fi cherche à maximiser le débit brut (la bande passante).
+L'envoi d'une trame radio coûte très cher en temps (il y a un préambule radio, des en-têtes, des temps d'écoute du canal, un accusé de réception). S'il envoyait chaque petit paquet réseau un par un, le Wi-Fi passerait son temps à dire "Bonjour" et "Au revoir" plutôt qu'à transmettre de la donnée utile.
+
+L'AMPDU résout ça : la puce Wi-Fi stocke tes paquets vidéo dans une file d'attente. Elle attend d'en avoir un bon paquet (comme un arrêt de bus qui attend de se remplir). Quand le buffer est plein, elle "agrège" tous ces petits paquets dans une seule trame radio géante et l'envoie d'un coup.
+
+### Lundi 22.06
+on va fixe l ofdm.
+
+pour load l'image dans la Flash.
+```bash
+sudo bladeRF-cli -L hostedxA9-latest.rbf
+```
+
+montre les boards connecté.
+```bash
+bladeRF-cli -p
+```
+
+
+entré en mode interactif.
+```bash
+sudo bladeRF-cli -i
+```
+
+une fois en mode interactif
+```bash
+# ATTENTION éviter de l'appeler "bladerf.conf" ou "bladeRF.conf"
+run config.conf
+
+# load une image en RAM
+load fpga image.rbf
+
+# lancer et stoper la transmission
+tx start
+tx stop
+```
+
+contenu du script.conf:
+```
+set frequency tx1 634M
+
+set bandwidth tx1 8M
+
+set samplerate tx1 20M
+
+set gain tx1 60
+
+set frequency tx2 634M
+
+set bandwidth tx2 8M
+
+set samplerate tx2 20M
+
+set gain tx2 60
+
+tx config file="/home/tb26/Flash_bladeRF/drone_1_5M.ts" format=bin channel=1,2 repeat=0
+
+tx config timeout=80000
+```
+
+mettre sur les ports USB 2.0
+
+
+
+```text
+tx config file="/home/tb26/Flash_bladeRF/live_video.ts" format=bin channel=1,2 repeat=0
+```
+
+---
+
+#### Terminal 1 : Créer le tuyau et lancer GStreamer
+
+1. Crée le fichier virtuel (le FIFO) :
+```bash
+mkfifo /home/tb26/Flash_bladeRF/live_video.ts
+```
+
+```bash
+sudo taskset -c 3 nice -n -20 gst-launch-1.0 -v \
+  libcamerasrc ! \
+  video/x-raw,width=640,height=480,framerate=30/1 ! \
+  videoconvert ! \
+  x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=1500 ! \
+  video/x-h264,profile=baseline ! \
+  mpegtsmux alignment=7 ! \
+  filesink location=/home/tb26/Flash_bladeRF/live_video.ts sync=false
+
+```
+
+option pipe via stdin
+```bash
+sudo taskset -c 3 nice -n -20 gst-launch-1.0 -q \
+  libcamerasrc ! \
+  video/x-raw,width=640,height=480,framerate=30/1 ! \
+  videoconvert ! queue max-size-buffers=2 leaky=downstream ! \
+  x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=1500 ! \
+  video/x-h264,profile=baseline ! \
+  mpegtsmux alignment=7 ! \
+  fdsink fd=1 sync=false | \
+bladeRF-cli -e "set samplerate tx1 20M" \
+            -e "set bandwidth tx1 8M" \
+            -e "set frequency tx1 634M" \
+            -e "set gain tx1 60" \
+            -e "set samplerate tx2 20M" \
+            -e "set bandwidth tx2 8M" \
+            -e "set frequency tx2 634M" \
+            -e "set gain tx2 60" \
+            -e "tx config timeout=80000" \
+            -e "tx config file=/dev/stdin format=bin channel=1,2" \
+            -e "tx start" -e "tx wait"
+```
+
+### Mardi 23.06
+
+point sur le code:
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+#include <sys/mman.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev0.0"
+#define GPIO_PIN 24
+#define RING_BUFFER_SIZE (1024 * 64)
+
+volatile unsigned *gpio;
+
+void setup_gpiomem() {
+    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
+    gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
+    close(mem_fd);
+    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en entree
+}
+
+int wait_for_stm32_ready() {
+    int timeout_counter = 0;
+    // Attente que le STM32 soit PRET (Broche à 1)
+    while ((* (gpio + 13) & (1 << GPIO_PIN)) == 0) {
+        timeout_counter++;
+        if (timeout_counter > 2000000) { return 0; }
+    }
+    return 1;
+}
+
+int main() {
+    int spi_fd;
+    FILE *cam_pipe;
+    int pipe_fd;
+    uint32_t speed = 8000000; // 8 MHz
+    uint8_t bits = 8;
+    uint32_t mode = 0;
+
+    setup_gpiomem();
+
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) { perror("SPI open"); return 1; }
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+    // Caméra à 30 fps (pour équilibrer avec le Wi-Fi MCS 2)
+    const char *cmd = "rpicam-vid -t 0 -n -o - --width 320 --height 240 --framerate 60 "
+                      "--codec mjpeg --denoise off --exposure sport --metering centre "
+                      "--awb daylight --quality 8 --flush";
+
+    printf(">>> Lancement de la capture caméra directe...\n");
+    cam_pipe = popen(cmd, "r");
+    if (!cam_pipe) {
+        perror("Échec du lancement");
+        close(spi_fd);
+        return 1;
+    }
+
+    pipe_fd = fileno(cam_pipe);
+    int flags = fcntl(pipe_fd, F_GETFL, 0);
+    fcntl(pipe_fd, F_SETFL, flags | O_NONBLOCK);
+
+    uint8_t spi_buffer[CHUNK_SIZE];
+    uint8_t *recv_buf = malloc(RING_BUFFER_SIZE);
+    size_t recv_len = 0;
+    int drop_counter = 0;
+
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (uint64_t)(uintptr_t)spi_buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+        .cs_change = 0,
+    };
+
+    printf(">>> Routage SPI actif : Anti-Flicker & Handshake matériel\n");
+
+    while (1) {
+        int n = read(pipe_fd, recv_buf + recv_len, RING_BUFFER_SIZE - recv_len);
+
+        if (n < 0) {
+            usleep(1000);
+            continue;
+        }
+        if (n == 0) {
+            printf("Flux caméra interrompu.\n");
+            break;
+        }
+        recv_len += n;
+
+        while (recv_len > 4) {
+            int start_idx = -1;
+            int end_idx = -1;
+
+            for (size_t i = 0; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD8) { start_idx = i; break; }
+            }
+            if (start_idx == -1) { recv_len = 0; break; }
+
+            for (size_t i = start_idx; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD9) { end_idx = i + 1; break; }
+            }
+
+            if (start_idx != -1 && end_idx != -1) {
+                size_t jpeg_size = end_idx - start_idx + 1;
+                
+                uint8_t *frame_buffer = malloc(jpeg_size);
+                memcpy(frame_buffer, recv_buf + start_idx, jpeg_size);
+
+                size_t remaining = recv_len - (end_idx + 1);
+                memmove(recv_buf, recv_buf + end_idx + 1, remaining);
+                recv_len = remaining;
+
+                size_t bytes_sent = 0;
+                int frame_corrupted = 0;
+
+                while (bytes_sent < jpeg_size) {
+                    size_t to_send = jpeg_size - bytes_sent;
+                    if (to_send > CHUNK_SIZE) to_send = CHUNK_SIZE;
+
+                    memcpy(spi_buffer, frame_buffer + bytes_sent, to_send);
+
+                    // FIX 1 : Padding neutre avec des zéros
+                    // (Le vrai marqueur FF D9 de la caméra est déjà dans le buffer)
+                    if (to_send < CHUNK_SIZE) {
+                        memset(spi_buffer + to_send, 0x00, CHUNK_SIZE - to_send);
+                    }
+
+                    if (wait_for_stm32_ready()) {
+                        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) {
+                            frame_corrupted = 1;
+                            break;
+                        }
+                        
+                        // FIX 2 : Handshake déterministe (Acquittement)
+                        // On attend activement que le STM32 passe la broche à 0 (Occupé)
+                        // Cela garantit qu'il a bien reçu l'interruption avant qu'on ne reboucle.
+                        int ack_timeout = 0;
+                        while ((* (gpio + 13) & (1 << GPIO_PIN)) != 0) {
+                            ack_timeout++;
+                            if (ack_timeout > 50000) break; // Sécurité
+                        }
+                        
+                        drop_counter = 0;
+                    } else {
+                        drop_counter++;
+                        if (drop_counter == 1 || drop_counter % 120 == 0) {
+                            printf("[ATTENTION] Timeout STM32 ! (%d paquets jetés)\n", drop_counter);
+                        }
+                        frame_corrupted = 1;
+                        break;
+                    }
+                    bytes_sent += to_send;
+                }
+
+                free(frame_buffer); 
+                if (frame_corrupted) continue; 
+
+            } else {
+                break; 
+            }
+        }
+    }
+
+    free(recv_buf);
+    pclose(cam_pipe);
+    close(spi_fd);
+    return 0;
+}
+```
+```bash
+tb26@rpivtx:~/MJPEG $ gcc -O3 gateway_spi_noserv.c -o mjpeg_to_spi
+tb26@rpivtx:~/MJPEG $ sudo taskset -c 3 nice -n -20 ./mjpeg_to_spi
+```
+
+```c
+#include <string.h>
+#include <endian.h>
+#include "mmosal.h"
+#include "mmwlan.h"
+#include "mmconfig.h"
+
+#include "mmipal.h"
+#include "lwip/icmp.h"
+#include "lwip/tcpip.h"
+#include "lwip/udp.h"
+#include "lwip/netif.h"
+
+
+#include "mm_app_common.h"
+#include "stm32u5xx_hal.h"
+
+// --- SPI ---
+#define SPI_PAYLOAD_SIZE 1400
+
+SPI_HandleTypeDef hspi1;
+uint8_t spi_rx_buffer[SPI_PAYLOAD_SIZE];
+volatile bool spi_packet_received = false;
+// ---------------------
+/* Application default configurations. */
+
+/** Number of broadcast packet to transmit */
+#define DEFAULT_BROADCAST_PACKET_COUNT 100
+/** UDP port to bind too. */
+#define DEFAULT_UDP_PORT 1337
+/** Interval between successive packet transmission. */
+#define DEFAULT_PACKET_INTERVAL_MS 100
+/** Maximum length of broadcast tx packet payload */
+#define BROADCAST_PACKET_MAX_TX_PAYLOAD_LEN 35
+/** Format string to use for the tx packet payload */
+#define BROADCAST_PACKET_TX_PAYLOAD_FMT "G'day World, packet no. %lu."
+/** Default mode for the application */
+#define DEFAULT_UDP_BROADCAST_MODE TX_MODE
+/** Default ID used in the rx metadata. */
+#define DEFAULT_UDP_BROADCAST_ID 0
+
+/** Key used to identify received broadcast packets. */
+#define MMBC_KEY 0x43424d4d
+
+/** Enumeration of the various broadcast modes that can be used. */
+enum udp_broadcast_mode
+{
+    /** Transmit mode. Application will transmit a set amount of broadcast packets. */
+    TX_MODE,
+    /** Receive mode. Application will listen for any broadcast packets and process any that start
+     * with @ref MMBC_KEY */
+    RX_MODE
+};
+
+/** UDP broadcast rx payload format. */
+PACK_STRUCT_STRUCT struct udp_broadcast_rx_payload
+{
+    /** Key used to identify payload.*/
+    uint32_t key;
+
+    /** Flexible array member used to access color data for each ID. */
+    struct
+    {
+        /** Red intensity. */
+        uint8_t red;
+        /** Green intensity. */
+        uint8_t green;
+        /** Blue intensity. */
+        uint8_t blue;
+    } data[];
+};
+
+/** Struct used in rx mode for storing state. */
+struct udp_broadcast_rx_metadata
+{
+    /** The last time in milliseconds that a valid payload was received. */
+    uint32_t last_rx_time_ms;
+    /** ID of the device, used to retrieve data from the payload. */
+    uint32_t id;
+};
+
+// --- Variables de Profilage DWT ---
+volatile uint32_t dwt_start = 0;
+volatile uint32_t dwt_end = 0;
+volatile uint32_t mcu_cycles = 0;
+extern uint32_t SystemCoreClock; // Fourni par le système STM32 (ex: 160000000 pour 160 MHz)
+
+/** Global data structure used in RX mode to record metadata. */
+static struct udp_broadcast_rx_metadata rx_metadata = { 0 };
+
+
+static volatile bool is_network_ready = false;
+
+/* Callback pour savoir quand la connexion est prete*/
+static void link_status_callback(const struct mmipal_link_status *link_status)
+{
+    if (link_status->link_state == MMIPAL_LINK_UP) {
+        printf("\n>>> CONNECTE A OPENWRT <<<\n");
+        is_network_ready = true;
+    }
+}
+
+/**
+ * Callback function to handle received data from the UDP pcb.
+ *
+ * @warning Be aware that @c addr might point into the pbuf @c p so freeing this pbuf can make
+ *          @c addr invalid, too.
+ *
+ * @param arg   User supplied argument used to store a reference to the global rx_metadata struct.
+ * @param pcb   The udp_pcb which received data
+ * @param p     The packet buffer that was received
+ * @param addr  The remote IP address from which the packet was received
+ * @param port  The remote port from which the packet was received
+ */
+static void udp_raw_recv(void *arg,
+                         struct udp_pcb *pcb,
+                         struct pbuf *p,
+                         const ip_addr_t *addr,
+                         u16_t port)
+{
+    LWIP_UNUSED_ARG(pcb);
+    LWIP_UNUSED_ARG(addr);
+    LWIP_UNUSED_ARG(port);
+
+    if (p == NULL)
+    {
+        return;
+    }
+
+    struct udp_broadcast_rx_metadata *metadata = (struct udp_broadcast_rx_metadata *)arg;
+    struct udp_broadcast_rx_payload *payload = (struct udp_broadcast_rx_payload *)p->payload;
+    uint32_t current_time_ms = mmosal_get_time_ms();
+
+    /* This is the minimum length we need to prevent reading off the end of the payload. */
+    uint32_t min_payload_len =
+        sizeof(payload->key) + (sizeof(payload->data[0]) * (metadata->id + 1));
+
+    if (p->len < min_payload_len)
+    {
+        printf("Payload length to short. Len: %u. Min len: %lu\n", p->len, min_payload_len);
+        goto exit;
+    }
+
+    if (le32toh(payload->key) != MMBC_KEY)
+    {
+        printf("Invalid payload received.\n");
+        goto exit;
+    }
+
+    printf("Valid payload received. \n"
+           "    Time since last: %lums\n"
+           "    Data recieved: 0x%02x%02x%02x\n\n",
+           (current_time_ms - metadata->last_rx_time_ms),
+           payload->data[metadata->id].red,
+           payload->data[metadata->id].green,
+           payload->data[metadata->id].blue);
+
+    metadata->last_rx_time_ms = current_time_ms;
+
+    mmhal_set_led(LED_RED, payload->data[metadata->id].red);
+    mmhal_set_led(LED_GREEN, payload->data[metadata->id].green);
+    mmhal_set_led(LED_BLUE, payload->data[metadata->id].blue);
+
+exit:
+    pbuf_free(p);
+}
+
+/**
+ * Set a receive callback for the UDP PCB. This callback will be called when receiving a datagram
+ * for the pcb.
+ *
+ * @param pcb UDP protocol control block to register the callback for
+ */
+static void udp_broadcast_rx_start(struct udp_pcb *pcb)
+{
+    mmconfig_read_uint32("udp_broadcast.id", &(rx_metadata.id));
+
+    LOCK_TCPIP_CORE();
+    udp_recv(pcb, udp_raw_recv, &rx_metadata);
+    UNLOCK_TCPIP_CORE();
+}
+
+/**
+ * Broadcast a udp packet every @ref DEFAULT_PACKET_INTERVAL_MS until @ref
+ * DEFAULT_BROADCAST_PACKET_COUNT packets have been sent.
+ *
+ * @note If the parameters are set in the config store they will be used.
+ *
+ * @param pcb UDP protocol control block to use for transmission
+ */
+static void udp_broadcast_tx_start(struct udp_pcb *pcb)
+{
+    //err_t err;
+
+    ip_set_option(pcb, SOF_BROADCAST);
+    ip_addr_t dest_ip;
+    IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 10);
+
+    // --- ACTIVATION DU COMPTEUR DE CYCLES DWT ---
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+   	DWT->CYCCNT = 0;
+   	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+    printf(">>> PONT SPI-WIFI ACTIVE ! En attente de la Rpi... <<<\n");
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+    uint32_t packet_counter = 0;
+        while (1)
+        {
+            if (spi_packet_received) {
+
+            	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, SPI_PAYLOAD_SIZE, PBUF_REF);
+            	if (p != NULL) {
+            	    p->payload = (void *)spi_rx_buffer;
+
+            	    LOCK_TCPIP_CORE();
+            	    udp_sendto(pcb, p, &dest_ip, 1337);
+            	    UNLOCK_TCPIP_CORE();
+
+            	    pbuf_free(p);
+            	}
+
+            	// --- ARRÊT DU CHRONO ---
+            	dwt_end = DWT->CYCCNT;
+            	mcu_cycles = dwt_end - dwt_start;
+
+            	// Affichage 1 fois tous les 100 paquets (pour ne pas bloquer le CPU avec l'UART)
+            	if ((packet_counter++ % 100) == 0) {
+            	    // SystemCoreClock vaut 160000000 (160 MHz)
+            	    uint32_t freq_mhz = SystemCoreClock / 1000000;
+            	    uint32_t time_us = mcu_cycles / freq_mhz;
+
+            		printf("[Profilage] Temps de traitement MCU : %lu us (%lu cycles)\n", time_us, mcu_cycles);
+            	}
+
+                spi_packet_received = false;
+
+                // STM32 écoute
+                HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+                HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+
+            } else {
+               // mmosal_task_sleep(1);
+            }
+        }
+}
+
+/**
+ * Initialize the UDP protocol control block. Binds to @ref DEFAULT_UDP_PORT
+ *
+ * @note If the parameters are set in the config store they will be used.
+ *
+ * @return Reference to the pcb is successfully initialized else NULL
+ */
+static struct udp_pcb *init_udp_pcb(void)
+{
+    struct udp_pcb *pcb = NULL;
+    LOCK_TCPIP_CORE();
+    pcb = udp_new();
+    if (pcb != NULL) {
+        udp_bind(pcb, IP_ANY_TYPE, 1337);
+    }
+    UNLOCK_TCPIP_CORE();
+    return pcb;
+}
+/**
+ * Get the mode from config store.
+ *
+ * @return translates the value of @c udp_broadcast.mode into a @ref udp_broadcast_mode, if no valid
+ *         mode is set @ref DEFAULT_UDP_BROADCAST_MODE is returned.
+ */
+static enum udp_broadcast_mode get_mode(void)
+{
+    enum udp_broadcast_mode mode = DEFAULT_UDP_BROADCAST_MODE;
+    char mode_str[32];
+    if (mmconfig_read_string("udp_broadcast.mode", mode_str, sizeof(mode_str)) > 0)
+    {
+        if (strcasecmp(mode_str, "tx") == 0)
+        {
+            mode = TX_MODE;
+        }
+        else if (strcasecmp(mode_str, "rx") == 0)
+        {
+            mode = RX_MODE;
+        }
+        else
+        {
+            printf("Unknown mode: %s. Reverting to default.\n", mode_str);
+        }
+    }
+
+    return mode;
+}
+
+void SPI_Slave_Init(void)
+{
+    // 1. Activer les horloges du SPI1, du Port E(SPI) et port D (Spare GPIO)(go no go jetson)
+    __HAL_RCC_SPI1_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    // D10(PE12), D13(PE13), D12(PE14) et D11(PE15)
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+
+    GPIO_InitStruct.Alternate = GPIO_AF5_SPI1; // Sur U5, Port E = SPI1 (AF5) !
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+    // Config SPI1
+    hspi1.Instance = SPI1;
+    hspi1.Init.Mode = SPI_MODE_SLAVE;
+    hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+    hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+    hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+    hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+
+    // CS sur D10
+    hspi1.Init.NSS = SPI_NSS_HARD_INPUT;
+
+    hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+    hspi1.Init.TIMode = SPI_TIMODE_DISABLED;
+    hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLED;
+    hspi1.Init.CRCPolynomial = 7;
+
+    if (HAL_SPI_Init(&hspi1) != HAL_OK) {
+    	printf("ERREUR : Echec initialisation SPI1 !\n");
+	} else {
+        printf("SPI Esclave (SPI1) initialise sur PE12 a PE15 !\n");
+    }
+
+        // --- LES 2 LIGNES MANQUANTES POUR LE MODE '_IT' --- mode IT ?
+	HAL_NVIC_SetPriority(SPI1_IRQn, 5, 0);
+	HAL_NVIC_EnableIRQ(SPI1_IRQn);
+
+	// Initialisation de la broche Handshake (PD15) (Go no go jetson)
+	GPIO_InitTypeDef GPIO_InitStruct_Handshake = {0};
+	GPIO_InitStruct_Handshake.Pin = GPIO_PIN_15;
+	GPIO_InitStruct_Handshake.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct_Handshake.Pull = GPIO_NOPULL;
+	GPIO_InitStruct_Handshake.Speed = GPIO_SPEED_FREQ_HIGH;
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct_Handshake);
+}
+// Quand le STM32 a reçu un paquet
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi->Instance == SPI1) {
+    	// Démarrer le chrono
+    	dwt_start = DWT->CYCCNT;
+    	// mesure
+    	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
+        spi_packet_received = true;
+        //HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE); //ca faisait un double receive donc erreur -> donc un peut de lantence en plus
+    }
+}
+
+void SPI1_IRQHandler(void)
+{
+    HAL_SPI_IRQHandler(&hspi1);
+}
+
+
+/**
+ * Main entry point to the application. This will be invoked in a thread once operating system
+ * and hardware initialization has completed. It may return, but it does not have to.
+ */
+void app_init(void)
+{
+    printf("\n\n--- PIPELINE RPI -> STM32 -> WIFI ---\n\n");
+
+    SPI_Slave_Init();
+
+    HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+
+    // Configuration d'une QoS ultra-agressive pour le FPV
+    struct mmwlan_qos_queue_params fpv_qos = {
+        .aci = 3,         // ACI 3 = Voice (Correspond au TOS 0xC0 de LwIP)
+        .aifs = 2,        // Temps d'attente inter-trame minimum légal (ultra rapide)
+        .cw_min = 1,      // Fenêtre de contention quasi-nulle (parle tout de suite)
+        .cw_max = 1,      // S'il y a collision, ne recule presque pas
+        .txop_max_us = 0  // Désactivé
+    };
+
+    // À appeler avant mmwlan_sta_enable ou pendant l'init
+    mmwlan_set_default_qos_queue_params(&fpv_qos, 1);
+
+    app_wlan_init();
+    mmipal_set_link_status_callback(link_status_callback);
+
+    printf("Connexion a l'AP OpenWrt en cours...\n");
+    app_wlan_start();
+
+    mmwlan_ate_override_rate_control(MMWLAN_MCS_1, MMWLAN_BW_8MHZ, MMWLAN_GI_NONE);
+    printf("forcage OK : 8 MHz / MCS 1 force.\n");
+    mmwlan_set_power_save_mode(MMWLAN_PS_DISABLED); // pour que quand il n'est pas sous load les ping passe bien
+
+
+    while (!is_network_ready) {
+        mmosal_task_sleep(10);
+    }
+
+    struct udp_pcb *pcb = init_udp_pcb();
+    if (pcb != NULL) {
+    	// 0xC0 = CS6 (Internetwork Control) -> Souvent mappé sur TID 6/7 (Voice)
+    	// 0xA0 = CS5 -> Mappé sur TID 4/5 (Video)
+    	pcb->tos = 0xC0;
+        udp_broadcast_tx_start(pcb);
+    }
+
+    (void)get_mode;
+    (void)udp_broadcast_rx_start;
+}
+```
+avec ca plus PC fixe avec écran 165Hz latence = généralement entre 40 et 50ms avec pic a 60 et 30.
+
 
 
 ## Juillet

@@ -468,6 +468,9 @@ gantt
     Rendu final                 :milestone ,2026-07-23, 0d
 ```
 
+### Vendredi 12.06
+
+
 ## Juillet
 
 ### Jeudi 23.07 avant 11h00
