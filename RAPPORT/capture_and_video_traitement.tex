@@ -28,7 +28,22 @@ Bien que l'acquisition sur Raspberry Pi ait nécessité le recours ponctuel à u
 compression du flux exploite universellement la norme H.264. La stratégie de configuration globale a été 
 pensée pour prioriser la vitesse d'exécution au détriment de la qualité visuelle.
 
-\newpage
+\subsection{Limites de l'encodage H.264 et bascule vers le MJPEG}
+Malgré l'application stricte des optimisations H.264 (désactivation des B-Frames, utilisation d'outils 
+\textit{Bare-Metal}), un test de validation croisée via un câble Ethernet direct (sans Wi-Fi HaLow) a 
+révélé une latence résiduelle \textit{Glass-to-Glass} incompressible d'environ 100 ms. 
+
+Ce test a prouvé que la vaste majorité du délai provenait de l'encodage et du décodage matériel. Le 
+H.264 étant un codec \textbf{inter-trame}, le décodeur nécessite d'analyser les relations temporelles entre 
+plusieurs trames pour reconstruire l'image, générant une rétention inévitable. 
+
+Pour briser ce plafond de verre, l'architecture a évolué vers le format \textbf{MJPEG} 
+(\textit{Motion JPEG}). Ce codec \textbf{intra-trame} compresse chaque image indépendamment : une image 
+reçue est immédiatement affichable. Bien que cette méthode exige une bande passante supérieure 
+(compensée par un \textit{downscale} matériel de la résolution et un forçage de la QoS réseau), elle 
+supprime totalement le besoin d'accumulation temporelle à la réception.
+
+%\newpage
 
 \subsection{Pipelines d'émission (TX)}
 \begin{figure}[htbp]
@@ -38,7 +53,7 @@ pensée pour prioriser la vitesse d'exécution au détriment de la qualité visu
     \label{fig:complet_schematic_nb3}
 \end{figure}
 Pour implémenter cette stratégie de très basse latence en situation réelle, les chaînes de traitement 
-ont été développées et adaptées selon l'architecture matérielle cible. 
+ont été développées et adaptées selon l'architecture matérielle cible et le codec choisi. 
 
 Lors des premiers essais sur la Raspberry Pi 4B, il a été constaté que l'utilisation de l'encodeur 
 matériel intégré au travers du plugin GStreamer standard (\texttt{v4l2h264enc}) introduisait une latence 
@@ -47,50 +62,49 @@ fortement l'acquisition.
 
 Pour la plateforme Raspberry Pi, GStreamer a donc été écarté à l'émission au profit de l'outil 
 natif \texttt{rpicam-vid}. Basé sur \textit{libcamera}, il permet un accès direct et optimisé au 
-processeur de traitement d'image (ISP) et à l'encodeur matériel (H.264) de la carte, réduisant 
+processeur de traitement d'image (ISP) et à l'encodeur matériel de la carte, réduisant 
 drastiquement le temps de traitement.
 
 \begin{lstlisting}[language=bash]
-# Sur Nvidia Jetson Nano (NVENC)
+# Sur Nvidia Jetson Nano (NVENC - Iteration H.264)
 gst-launch-1.0 nvarguscamerasrc ! \
 'video/x-raw(memory:NVMM),width=640,height=480,framerate=60/1' ! \
 nvv4l2h264enc bitrate=400000 control-rate=1 preset-level=1 \
 insert-sps-pps=true idrinterval=1000 maxperf-enable=1 num-B-Frames=0 ! \
 h264parse ! fdsink
 
-# Sur Raspberry Pi 4B (V4L2)
-gst-launch-1.0 v4l2src device=/dev/video0 ! \
-'video/x-raw,width=640,height=480,framerate=60/1' ! \
-v4l2h264enc extra-controls="controls,video_bitrate=400000,video_b_frames=0" ! \
-h264parse ! fdsink
-
-# Sur Raspberry Pi 4B (Outil natif libcamera rpicam-vid)
+# Sur Raspberry Pi 4B (Outil natif libcamera - Iteration H.264)
 rpicam-vid -t 0 --width 640 --height 480 --framerate 60 --bitrate 400000 \
 --profile baseline --inline --intra 60 --flush -o -
+
+# Sur Raspberry Pi 4B (Outil natif libcamera - Flux MJPEG optimisé final)
+rpicam-vid -t 0 -n -o - --width 320 --height 240 --framerate 60 --codec mjpeg \
+--denoise off --exposure sport --metering centre --awb daylight --quality 8 --flush
 \end{lstlisting}
 
 \subsubsection{Précisions sur les paramètres d'envoi}
-Certains drapeaux (\textit{flags}) spécifiques ont été ajoutés pour forcer le comportement temps réel des chaînes et leurs débits :
+Certains drapeaux (\textit{flags}) spécifiques ont été ajoutés pour forcer le comportement temps réel des chaînes. En plus des optimisations H.264 (CBR strict, suppression des B-Frames, injection SPS/PPS), le passage au MJPEG a nécessité des paramètres matériels agressifs :
 \begin{itemize}
-\item \textbf{Le contrôle de débit strict (CBR) :} Le débit est verrouillé à 400 kbps 
+    \item \textbf{Le contrôle de débit strict (CBR) :} En H.264, le débit est verrouillé à 400 kbps 
     (\texttt{bitrate=400000}) pour éviter tout pic de données soudain qui saturerait le bus SPI 
     et la mémoire du STM32.
     \item \textbf{L'absence d'images bidirectionnelles :} Sur GStreamer, \texttt{num-B-Frames=0} est 
-    explicitement appelé. Sur Raspberry Pi, l'utilisation du profil \texttt{--profile baseline} garantit 
-    que l'encodeur ne génère aucune trame "B" nécessitant d'attendre l'image future, supprimant ainsi un 
-    délai algorithmique.
-    \item \textbf{L'espacement des images clés (I-Frames) :} L'envoi d'images clés, très volumineuses, 
-    doit être contrôlé. Sur la Jetson, \texttt{idrinterval=1000} les espace au maximum. Sur la Raspberry Pi, 
-    \texttt{--intra 60} force une image clé par seconde (à 60 fps) pour permettre au récepteur de raccrocher 
-    rapidement en cas de perte de signal RF.
+    explicitement appelé. Sur Raspberry Pi (H.264), l'utilisation du profil \texttt{--profile baseline} garantit 
+    que l'encodeur ne génère aucune trame "B" nécessitant d'attendre l'image future.
     \item \textbf{L'injection des en-têtes de flux :} Les arguments \texttt{insert-sps-pps=true} (Jetson) 
-    et \texttt{--inline} (RPi) forcent l'encodeur à écrire les informations de séquence (SPS/PPS) à chaque 
+    et \texttt{--inline} (RPi) forcent l'encodeur H.264 à écrire les informations de séquence (SPS/PPS) à chaque 
     image clé. Sans cela, un récepteur subissant une micro-coupure réseau serait incapable de reprendre 
     le décodage du flux en cours de route.
     \item \textbf{L'expulsion immédiate des tampons (Flush) :} L'argument \texttt{--flush} sur \texttt{rpicam-vid} 
-    garantit que les données H.264 sont immédiatement poussées dans la sortie standard (le *pipe* relié 
-    à notre programme C) dès qu'elles sont prêtes, sans attendre de remplir un tampon logiciel de l'OS. 
-    Sur GStreamer, c'est le \texttt{h264parse disable-passthrough=true} qui force cet alignement immédiat.
+    garantit que les données vidéo sont immédiatement poussées dans la sortie standard (le \textit{pipe} relié 
+    à notre programme C) dès qu'elles sont prêtes, sans attendre de remplir un tampon logiciel de l'OS.
+    \item \textbf{Le \textit{Supersampling} matériel (MJPEG) :} Pour absorber la hausse de bande passante du MJPEG, 
+    la résolution finale est réduite à 320x240. L'ISP de la caméra effectue un \textit{downscale} matériel direct 
+    depuis le capteur, lissant le bruit numérique sans impacter la netteté.
+    \item \textbf{Le gel des algorithmes de traitement (MJPEG) :} L'exposition (\texttt{--exposure sport}) et 
+    la balance des blancs (\texttt{--awb daylight}) sont figées. L'élimination du traitement adaptatif garantit 
+    un temps de calcul de l'ISP strictement déterministe. La qualité JPEG est fixée très bas (\texttt{--quality 10}) 
+    pour assurer le passage dans le canal radio restreint.
 \end{itemize}
 
 \newpage
@@ -106,37 +120,41 @@ Certains drapeaux (\textit{flags}) spécifiques ont été ajoutés pour forcer l
 est \texttt{sync=false}, qui ordonne à GStreamer d'afficher chaque trame dès qu'elle est prête, en 
 ignorant les horodatages.
 \begin{lstlisting}[language=bash]
-# Sur Station PC Windows (Acceleration D3D11)
+# Sur Station PC Windows (Acceleration D3D11 - Iteration H.264)
 gst-launch-1.0 udpsrc port=1337 buffer-size=0 ! \
 "video/x-h264,width=640,height=480,stream-format=byte-stream" ! \
 h264parse disable-passthrough=true ! d3d11h264dec ! \
 queue max-size-buffers=1 leaky=downstream ! \
 d3d11videosink sync=false async=false max-lateness=0
 
-# Sur Station cible Raspberry Pi (Bare-Metal via KMS)
+# Sur Station cible Raspberry Pi (Bare-Metal via KMS - Iteration H.264)
 gst-launch-1.0 -v udpsrc address=0.0.0.0 port=1337 buffer-size=0 ! \
 "video/x-h264,width=640,height=480,framerate=60/1,stream-format=byte-stream" ! \
 h264parse disable-passthrough=true config-interval=-1 ! v4l2h264dec ! \
 queue max-size-buffers=1 leaky=downstream ! \
 kmssink sync=false max-lateness=0
+
+# Sur PC de diagnostic (Flux MJPEG optimise final)
+gst-launch-1.0 -v udpsrc port=1337 do-timestamp=true ! \
+jpegparse ! jpegdec ! queue max-size-buffers=1 leaky=downstream ! \
+videoconvert ! autovideosink sync=false
 \end{lstlisting}
 
 \subsubsection{Précisions sur les paramètres de réception}
-Tout comme pour la phase d'émission, l'arborescence des éléments logiciels de réception a été épurée de tout mécanisme de rétention ou de lissage temporel :
+L'arborescence des éléments logiciels de réception a été épurée de tout mécanisme de rétention ou de lissage temporel :
 \begin{itemize}
-    \item \textbf{\texttt{sync=false} :} Désactive la synchronisation sur l'horloge globale du pipeline. L'élément de rendu (\textit{sink}) affiche la trame 
+    \item \textbf{\texttt{sync=false} et \texttt{max-lateness=0} :} L'élément de rendu (\textit{sink}) affiche la trame 
     immédiatement dès sa réception au lieu de la retenir pour respecter l'horodatage (\textit{timestamps}) d'origine, supprimant ainsi tout délai d'attente artificiel.
     \item \textbf{\texttt{queue max-size-buffers=1 leaky=downstream} :} Limite la file d'attente à un unique paquet en mémoire. Si un retard d'affichage survient 
     et qu'une nouvelle trame se présente, l'ancienne est immédiatement écrasée et jetée en aval (\textit{leaky downstream}). Cela empêche l'accumulation de retard 
     (\textit{buffer bloat}) et force le flux à recoller instantanément au temps réel.
     \item \textbf{\texttt{async=false} :} Empêche le composant d'affichage de bloquer le pipeline en attendant une phase de pré-chargement (\textit{preroll}) lors du 
     changement d'état, garantissant un démarrage visuel instantané dès la détection des premiers paquets UDP.
-    \item \textbf{\texttt{max-lateness=0} :} Indique au moteur de rendu de ne tolérer aucun retard de traitement. Associé à l'omission de la synchronisation, ce drapeau 
-    force le pipeline à ignorer toute tentative de calcul de recalage temporel pouvant induire de la gigue.
+    \item \textbf{L'assemblage des datagrammes (\texttt{jpegparse}) :} En H.264, le fort taux de compression permettait de faire tenir une trame dans un seul paquet UDP de 1400 octets. Le MJPEG, plus volumineux, génère inévitablement de la fragmentation réseau. L'élément \texttt{jpegparse} est critique : il force GStreamer à réassembler tous les morceaux UDP fragmentés jusqu'à la détection complète de l'image, évitant ainsi le crash du décodeur \texttt{jpegdec} qui ne tolère pas les trames incomplètes.
 \end{itemize}
 
 \subsection{Outils de diagnostic réseau}
 En complément de GStreamer, des utilitaires standards ont été employés pour le diagnostic du flux. 
 \texttt{Netcat} (\texttt{nc}) a été utilisé pour rediriger manuellement les paquets UDP lors du 
 prototypage, tandis que \texttt{tcpdump}\index{Tcpdump} a permis de capturer les trames à la volée 
-sur les interfaces sans-fil pour valider la non-fragmentation des paquets HaLow.
+sur les interfaces sans-fil pour valider la non-fragmentation (en H.264) des paquets HaLow.

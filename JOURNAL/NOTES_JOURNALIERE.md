@@ -4021,9 +4021,808 @@ void app_init(void)
 ```
 avec ca plus PC fixe avec écran 165Hz latence = généralement entre 40 et 50ms avec pic a 60 et 30.
 
+### Vendredi 26.06
+objectif remplacer vlc par gstreamer sur le système bladerf.
 
+rappel pour la transmition 
+
+TX : option pipe via stdin
+```bash
+sudo taskset -c 3 nice -n -20 gst-launch-1.0 -q \
+  libcamerasrc ! \
+  video/x-raw,width=640,height=480,framerate=30/1 ! \
+  videoconvert ! queue max-size-buffers=2 leaky=downstream ! \
+  x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=1500 ! \
+  video/x-h264,profile=baseline ! \
+  mpegtsmux alignment=7 ! \
+  fdsink fd=1 sync=false | \
+sudo bladeRF-cli -e "set samplerate tx1 20M" \
+            -e "set bandwidth tx1 8M" \
+            -e "set frequency tx1 634M" \
+            -e "set gain tx1 60" \
+            -e "set samplerate tx2 20M" \
+            -e "set bandwidth tx2 8M" \
+            -e "set frequency tx2 634M" \
+            -e "set gain tx2 60" \
+            -e "tx config timeout=80000" \
+            -e "tx config file=/dev/stdin format=bin channel=1,2" \
+            -e "tx start" -e "tx wait"
+```
+
+RX :
+lancer le driver
+```bash
+taskkill /F /IM vlc.exe
+```
+```bash
+"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe" dvb-t2://frequency=634000000:bandwidth=8:modulation=QPSK :dvb-adapter=2 --sout="#std{access=udp,mux=ts,dst=127.0.0.1:1234}" -I dummy
+```
+affichage:
+```bash
+gst-launch-1.0.exe -v ^
+  udpsrc port=1234 caps="video/mpegts" ! ^
+  tsdemux ! ^
+  queue max-size-buffers=1 leaky=downstream ! ^
+  h264parse ! ^
+  avdec_h264 ! ^
+  videoconvert ! ^
+  autovideosink sync=false
+```
+
+
+
+optimisation:
+
+pas fonctionel....
+```bash
+sudo taskset -c 3 nice -n -20 gst-launch-1.0 -q \
+  libcamerasrc ! \
+  video/x-raw,width=640,height=480,framerate=30/1 ! \
+  videoconvert ! queue max-size-buffers=1 leaky=downstream ! \
+  x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=1500 threads=1 sliced-threads=true ! \
+  video/x-h264,profile=baseline ! \
+  mpegtsmux alignment=7 pat-interval=1 pmt-interval=1 latency=0 ! \
+  fdsink blocksize=1316 sync=false | \
+sudo bladeRF-cli -e "set samplerate tx1 20M" \
+            -e "set bandwidth tx1 8M" \
+            -e "set frequency tx1 634M" \
+            -e "set gain tx1 60" \
+            -e "set samplerate tx2 20M" \
+            -e "set bandwidth tx2 8M" \
+            -e "set frequency tx2 634M" \
+            -e "set gain tx2 60" \
+            -e "tx config timeout=80000" \
+            -e "tx config file=/dev/stdin format=bin channel=1,2" \
+            -e "tx start" -e "tx wait"
+```
+
+
+
+```bash
+taskkill /F /IM vlc.exe
+```
+```bash
+"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe" "dvb-t2://frequency=634000000:bandwidth=8" :dvb-adapter=2 :dvb-a-modulation=QPSK :dvb-plp-id=0 :live-caching=0 --sout="#std{access=udp,mux=ts,dst=127.0.0.1:1234}" --sout-mux-caching=10 --network-caching=0 --file-caching=0 --clock-synchro=0 --clock-jitter=0 --drop-late-frames -I dummy
+
+
+"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe" "dvb-t2://frequency=634000000:bandwidth=8" :dvb-adapter=2 :dvb-a-modulation=QPSK :dvb-plp-id=0 :live-caching=50 --sout="#std{access=udp,mux=ts,dst=127.0.0.1:1234}" --sout-mux-caching=50 --network-caching=50 -I dummy
+```
+
+```bash
+gst-launch-1.0.exe -v ^
+  udpsrc port=1234 caps="video/mpegts" buffer-size=0 ! ^
+  tsdemux ! ^
+  queue max-size-buffers=1 max-size-bytes=0 max-size-time=0 leaky=downstream ! ^
+  h264parse ! ^
+  avdec_h264 ! ^
+  videoconvert ! ^
+  d3d11videosink sync=false
+
+  gst-launch-1.0.exe -v ^
+  udpsrc port=1234 caps="video/mpegts" ! ^
+  tsdemux ! ^
+  queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream ! ^
+  h264parse config-interval=-1 ! ^
+  avdec_h264 max-threads=1 ! ^
+  videoconvert ! ^
+  d3d11videosink sync=false
+```
+
+
+Tentative version TSDuck
+
+envoie:
+```bash
+sudo taskset -c 3 nice -n -20 gst-launch-1.0 -q \
+  libcamerasrc ! \
+  video/x-raw,width=640,height=480,framerate=30/1 ! \
+  videoconvert ! queue max-size-buffers=2 leaky=downstream ! \
+  x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=1500 ! \
+  video/x-h264,profile=baseline ! \
+  mpegtsmux alignment=7 ! \
+  fdsink fd=1 sync=false | \
+sudo bladeRF-cli -e "set samplerate tx1 20M" \
+            -e "set bandwidth tx1 8M" \
+            -e "set frequency tx1 634M" \
+            -e "set gain tx1 60" \
+            -e "set samplerate tx2 20M" \
+            -e "set bandwidth tx2 8M" \
+            -e "set frequency tx2 634M" \
+            -e "set gain tx2 60" \
+            -e "tx config timeout=80000" \
+            -e "tx config file=/dev/stdin format=bin channel=1,2" \
+            -e "tx start" -e "tx wait"
+```
+
+réception
+```bash
+tsp.exe -v -I dvb --adapter 2 --delivery-system DVB-T --frequency 634000000 --bandwidth 8000000 --modulation QPSK --transmission-mode auto --guard-interval auto --high-priority-fec auto --signal-timeout 10 -O ip 127.0.0.1:1234
+```
+```bash
+gst-launch-1.0.exe -v ^
+  udpsrc port=1234 caps="video/mpegts" ! ^
+  tsdemux ! ^
+  h264parse config-interval=-1 ! ^
+  avdec_h264 max-threads=1 ! ^
+  queue max-size-buffers=1 max-size-bytes=0 max-size-time=0 leaky=downstream ! ^
+  videoconvert ! ^
+  d3d11videosink sync=false
+```
+### Lundi 29.06
+récupération des caméra debix, flash de la sd, préparation des connecteurs. 
+
+gateway_spi.c
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+
+#define CHUNK_SIZE 1400
+
+#define SPI_DEVICE "/dev/spidev0.0"
+
+#define GPIO_SYSFS_PATH "/sys/class/gpio/gpio13/value"
+
+#define RING_BUFFER_SIZE (1024 * 64)
+
+int gpio_fd;
+
+void setup_gpio() {
+    // On ouvre le fichier sysfs de la valeur du GPIO en lecture seule
+    gpio_fd = open(GPIO_SYSFS_PATH, O_RDONLY);
+    if (gpio_fd < 0) { 
+        perror("Erreur GPIO sysfs (Le GPIO est-il exporte ?)"); 
+        exit(1); 
+    }
+}
+
+int wait_for_stm32_ready() {
+    int timeout_counter = 0;
+    char val;
+    // Attente que le STM32 soit PRET (Broche à 1)
+    while (1) {
+        pread(gpio_fd, &val, 1, 0); // Lecture ultra-rapide sans déplacer le curseur
+        if (val == '1') return 1;
+        
+        timeout_counter++;
+        if (timeout_counter > 200000) { return 0; }
+    }
+}
+
+int main() {
+    int spi_fd;
+    FILE *cam_pipe;
+    int pipe_fd;
+    uint32_t speed = 8000000; // 8 MHz
+    uint8_t bits = 8;
+    uint32_t mode = 0;
+
+    setup_gpio();
+
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) { perror("SPI open"); return 1; }
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+    // Pipeline GStreamer (V4L2 -> MJPEG logiciel rapide -> stdout)
+    const char *cmd = "gst-launch-1.0 -q v4l2src device=/dev/video0 ! "
+                      "video/x-raw,width=320,height=240,framerate=60/1 ! "
+                      "jpegenc quality=8 idct-method=1 ! "
+                      "fdsink fd=1 sync=false";
+
+    printf(">>> Lancement de la capture caméra (Debix GStreamer)...\n");
+    cam_pipe = popen(cmd, "r");
+    if (!cam_pipe) {
+        perror("Échec du lancement");
+        close(spi_fd);
+        close(gpio_fd);
+        return 1;
+    }
+
+    pipe_fd = fileno(cam_pipe);
+    int flags = fcntl(pipe_fd, F_GETFL, 0);
+    fcntl(pipe_fd, F_SETFL, flags | O_NONBLOCK);
+
+    uint8_t spi_buffer[CHUNK_SIZE];
+    uint8_t *recv_buf = malloc(RING_BUFFER_SIZE);
+    size_t recv_len = 0;
+    int drop_counter = 0;
+
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (uint64_t)(uintptr_t)spi_buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+        .cs_change = 0,
+    };
+
+    printf(">>> Routage SPI actif : Sysfs Polling & Handshake matériel\n");
+
+    while (1) {
+        int n = read(pipe_fd, recv_buf + recv_len, RING_BUFFER_SIZE - recv_len);
+
+        if (n < 0) {
+            usleep(1000);
+            continue;
+        }
+        if (n == 0) {
+            printf("Flux caméra interrompu.\n");
+            break;
+        }
+        recv_len += n;
+
+        while (recv_len > 4) {
+            int start_idx = -1;
+            int end_idx = -1;
+
+            for (size_t i = 0; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD8) { start_idx = i; break; }
+            }
+            if (start_idx == -1) { recv_len = 0; break; }
+
+            for (size_t i = start_idx; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD9) { end_idx = i + 1; break; }
+            }
+
+            if (start_idx != -1 && end_idx != -1) {
+                size_t jpeg_size = end_idx - start_idx + 1;
+                
+                uint8_t *frame_buffer = malloc(jpeg_size);
+                memcpy(frame_buffer, recv_buf + start_idx, jpeg_size);
+
+                size_t remaining = recv_len - (end_idx + 1);
+                memmove(recv_buf, recv_buf + end_idx + 1, remaining);
+                recv_len = remaining;
+
+                size_t bytes_sent = 0;
+                int frame_corrupted = 0;
+
+                while (bytes_sent < jpeg_size) {
+                    size_t to_send = jpeg_size - bytes_sent;
+                    if (to_send > CHUNK_SIZE) to_send = CHUNK_SIZE;
+
+                    memcpy(spi_buffer, frame_buffer + bytes_sent, to_send);
+
+                    if (to_send < CHUNK_SIZE) {
+                        memset(spi_buffer + to_send, 0x00, CHUNK_SIZE - to_send);
+                    }
+
+                    if (wait_for_stm32_ready()) {
+                        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) {
+                            frame_corrupted = 1;
+                            break;
+                        }
+                        
+                        // Handshake déterministe (Acquittement) via pread
+                        int ack_timeout = 0;
+                        char ack_val;
+                        while (1) {
+                            pread(gpio_fd, &ack_val, 1, 0);
+                            if (ack_val == '0') break;
+                            
+                            ack_timeout++;
+                            if (ack_timeout > 50000) break; 
+                        }
+                        
+                        drop_counter = 0;
+                    } else {
+                        drop_counter++;
+                        if (drop_counter == 1 || drop_counter % 120 == 0) {
+                            printf("[ATTENTION] Timeout STM32 ! (%d paquets jetés)\n", drop_counter);
+                        }
+                        frame_corrupted = 1;
+                        break;
+                    }
+                    bytes_sent += to_send;
+                }
+
+                free(frame_buffer); 
+                if (frame_corrupted) continue; 
+
+            } else {
+                break; 
+            }
+        }
+    }
+
+    free(recv_buf);
+    pclose(cam_pipe);
+    close(spi_fd);
+    close(gpio_fd);
+    return 0;
+}
+
+```
+
+init.sh
+```sh
+#!/bin/bash
+
+echo "=== Initialisation de la Gateway FPV Debix ==="
+
+# 1. Configuration du capteur 1300A (V4L2) - Mode Sport / Latence min
+echo "[1/3] Durcissement de la caméra V4L2..."
+v4l2-ctl -d /dev/video0 -c focus_auto=0
+v4l2-ctl -d /dev/video0 -c auto_exposure=1
+v4l2-ctl -d /dev/video0 -c exposure_time_absolute=150
+v4l2-ctl -d /dev/video0 -c white_balance_temperature_auto=0
+v4l2-ctl -d /dev/video0 -c white_balance_temperature=5500
+
+# 2. Configuration du Handshake (GPIO1_IO13 / Pin 32)
+echo "[2/3] Configuration du GPIO matériel..."
+# On demande à l'outil Debix de configurer la broche en entrée.
+# Le paramètre '0' (none) évite de générer des interruptions logicielles,
+# car notre code C fait déjà un polling matériel continu et plus rapide.
+debix-gpio GPIO1_IO13 in 0
+
+# (Optionnel) Si debix-gpio n'exporte pas le sysfs, on le force ici :
+if [ ! -d /sys/class/gpio/gpio13 ]; then
+    echo 13 > /sys/class/gpio/export
+fi
+
+# 3. Lancement du pont C isolé sur le coeur 3
+echo "[3/3] Lancement du routage SPI Zéro Latence..."
+sudo taskset -c 3 nice -n -20 ./mjpeg_to_spi
+```
+
+connection au réseau.
+```bash
+# pour ce connecter au wifi
+nmtui
+# pour trouver l'IP
+ip a 
+```
+ensuite 
+```bash
+ssh debix@10.251.215.209
+```
+
+nxp doc
+
+### Mardi 30.06
+
+version pour la debix fonctionnelle, mais environ 150ms de latence...
+
+gateway_spi2.c
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+#include <gpiod.h>
+
+#define CHUNK_SIZE 1400
+#define SPI_DEVICE "/dev/spidev1.0"
+#define RING_BUFFER_SIZE (1024 * 64)
+
+// --- CONFIGURATION GPIO ACK ---
+// Broche d'acquittement (ACK) venant du STM32
+#define ACK_CHIP "gpiochip0"
+#define ACK_LINE 13
+// ------------------------------
+
+struct gpiod_chip *chip_ack;
+struct gpiod_line *line_ack;
+
+void setup_gpio() {
+    // Initialisation de l'ACK (Entrée) avec libgpiod
+    chip_ack = gpiod_chip_open_by_name(ACK_CHIP);
+    if (!chip_ack) { perror("Erreur ouverture chip ACK"); exit(1); }
+
+    line_ack = gpiod_chip_get_line(chip_ack, ACK_LINE);
+    if (!line_ack) { perror("Erreur ligne ACK"); exit(1); }
+
+    if (gpiod_line_request_input(line_ack, "FPV_GATEWAY") < 0) {
+        perror("Erreur requête input ACK"); exit(1);
+    }
+}
+
+void cleanup_gpio() {
+    gpiod_line_release(line_ack);
+    gpiod_chip_close(chip_ack);
+}
+
+int wait_for_stm32_ready() {
+    int timeout_counter = 0;
+    while (1) {
+        // Lecture matérielle directe, sans l'overhead de sysfs
+        if (gpiod_line_get_value(line_ack) == 1) return 1;
+
+        timeout_counter++;
+        if (timeout_counter > 200000) { return 0; }
+    }
+}
+
+int main() {
+    int spi_fd;
+    FILE *cam_pipe;
+    int pipe_fd;
+    uint32_t speed = 8000000; // 1 MHz (à remonter plus tard si le STM32 suit)
+    uint8_t bits = 8;
+    uint32_t mode = 0;
+
+    setup_gpio();
+
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if (spi_fd < 0) { perror("SPI open"); cleanup_gpio(); return 1; }
+    ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+
+
+    const char *cmd = "gst-launch-1.0 -q v4l2src device=/dev/video2 ! "
+                  "imxvideoconvert_g2d ! video/x-raw,width=320,height=240,format=BGRx ! "
+                  "videoconvert ! video/x-raw,format=I420 ! "
+                  "jpegenc quality=8 ! multipartmux ! fdsink fd=1 sync=false";
+
+    printf(">>> Lancement de la capture matérielle...\n");
+    cam_pipe = popen(cmd, "r");
+    if (!cam_pipe) {
+        perror("Échec FFmpeg");
+        close(spi_fd);
+        cleanup_gpio();
+        return 1;
+    }
+
+    pipe_fd = fileno(cam_pipe);
+    int flags = fcntl(pipe_fd, F_GETFL, 0);
+    fcntl(pipe_fd, F_SETFL, flags | O_NONBLOCK);
+
+    uint8_t spi_buffer[CHUNK_SIZE];
+    uint8_t *recv_buf = malloc(RING_BUFFER_SIZE);
+    size_t recv_len = 0;
+    int drop_counter = 0;
+
+
+    struct spi_ioc_transfer tr = {
+        .tx_buf = (uint64_t)(uintptr_t)spi_buffer,
+        .rx_buf = 0,
+        .len = CHUNK_SIZE,
+        .speed_hz = speed,
+        .bits_per_word = bits,
+        .cs_change = 0, // Le contrôleur SPI gère son propre CS
+    };
+
+    printf(">>> Routage SPI actif : G2D Acceleration, Hardware CS & libgpiod ACK\n");
+
+    while (1) {
+        int n = read(pipe_fd, recv_buf + recv_len, RING_BUFFER_SIZE - recv_len);
+
+        if (n < 0) { usleep(1000); continue; }
+        if (n == 0) { printf("Flux interrompu.\n"); break; }
+        recv_len += n;
+
+        while (recv_len > 4) {
+            int start_idx = -1, end_idx = -1;
+
+            for (size_t i = 0; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD8) { start_idx = i; break; }
+            }
+            if (start_idx == -1) { recv_len = 0; break; }
+
+            for (size_t i = start_idx; i < recv_len - 1; i++) {
+                if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD9) { end_idx = i + 1; break; }
+            }
+
+            if (start_idx != -1 && end_idx != -1) {
+                size_t jpeg_size = end_idx - start_idx + 1;
+                uint8_t *frame_buffer = malloc(jpeg_size);
+                memcpy(frame_buffer, recv_buf + start_idx, jpeg_size);
+
+                size_t remaining = recv_len - (end_idx + 1);
+                memmove(recv_buf, recv_buf + end_idx + 1, remaining);
+                recv_len = remaining;
+
+                size_t bytes_sent = 0;
+                int frame_corrupted = 0;
+
+                while (bytes_sent < jpeg_size) {
+                    size_t to_send = jpeg_size - bytes_sent;
+                    if (to_send > CHUNK_SIZE) to_send = CHUNK_SIZE;
+
+                    memcpy(spi_buffer, frame_buffer + bytes_sent, to_send);
+                    if (to_send < CHUNK_SIZE) {
+                        memset(spi_buffer + to_send, 0x00, CHUNK_SIZE - to_send);
+                    }
+
+                    if (wait_for_stm32_ready()) {
+
+                        // L'appel système bloque, le contrôleur SPI gère le CS
+                        if (ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr) < 1) {
+                            frame_corrupted = 1;
+                            break;
+                        }
+
+                        // Attente de l'acquittement du STM32
+                        int ack_timeout = 0;
+                        while (1) {
+                            if (gpiod_line_get_value(line_ack) == 0) break;
+                            ack_timeout++;
+                            if (ack_timeout > 50000) break;
+                        }
+
+                        drop_counter = 0;
+                    } else {
+                        drop_counter++;
+                        printf("[DEBUG] Timeout STM32 ! Octets envoyés: %zu / %zu\n", bytes_sent, jpeg_size);
+                        frame_corrupted = 1;
+                        break;
+                    }
+                    bytes_sent += to_send;
+                }
+                free(frame_buffer);
+                if (frame_corrupted) continue;
+            } else {
+                break;
+            }
+        }
+    }
+
+    free(recv_buf);
+    pclose(cam_pipe);
+    close(spi_fd);
+    cleanup_gpio();
+    return 0;
+}
+```
+
+```bash
+debix@imx8mp-debix:~$ gcc -O3 gateway_spi2.c -o gateway_spi2 -lgpiod
+debix@imx8mp-debix:~$ sudo ./gateway_spi2
+```
 
 ## Juillet
+
+### Jeudi 02.07
+
+https://debix.io/wp-content/uploads/2025/09/imx-linux-users-guide.pdf P.59 
+il n'y a pas de mention de MJPEG, ce qui pourrais expliquer la lenteur si cet encodage n'est pas accélerer matériellement.
+
+les commandes mentionné dans la doc sont les suivante.
+
+```bash
+# For example:
+gst-launch-1.0 filesrc location=$FILE.mp4 typefind=true ! video/quicktime ! aiurdemux !
+vpudec ! imxvideoconvert_ipu ! video/x-raw,format=NV12,width=1280,height=720 ! vpuenc_h264 ! 
+[h264parse] ! matroskamux ! filesink location=$FILE.mkv
+# For i.MX 8QuadMax/8QuadXPlus, use the following command:
+gst-launch-1.0 filesrc location=$FILE.mp4 typefind=true ! video/quicktime ! aiurdemux ! v4l2h264dec ! 
+queue ! imxvideoconvert_g2d ! queue ! videoconvert ! queue ! v4l2h264enc ! [h264parse] ! 
+matroskamux ! filesink location=$FILE.mkv
+# For i.MX 8M Mini/8M Plus, use the following command:
+gst-launch-1.0 filesrc location=$FILE.mp4 typefind=true ! video/quicktime ! aiurdemux ! v4l2h264dec ! 
+queue ! v4l2h264enc ! [h264parse] ! matroskamux ! filesink location=$FILE.mkv
+```
+
+avec ca on tombe a 100ms
+```c
+const char *cmd = "gst-launch-1.0 -q v4l2src device=/dev/video2 ! "
+                  "imxvideoconvert_g2d ! video/x-raw,width=320,height=240,format=BGRx ! "
+                  "videoconvert ! video/x-raw,format=I420 ! "
+                  "jpegenc quality=8 ! fdsink fd=1 sync=false";
+```
+
+test en h.264
+```c
+const char *cmd = "gst-launch-1.0 -q v4l2src device=/dev/video2 ! "
+                  "v4l2h264enc gop-size=1 capture-io-mode=4 output-io-mode=4 ! "
+                  "fdsink fd=1 sync=false";
+```
+
+### Vendredi 03.07
+• The target encoder codec type can be:
+— MPEG4, H.263, H.264, and MJPEG for i.MX 6
+page 59 de https://debix.io/wp-content/uploads/2025/09/imx-linux-users-guide.pdf
+
+Nous travaillons avec un MX8 donc il est nécessaire d'avoir une étape suplémentaire dans le pipeline. 
+
+dans tout les cas il semble que de dimensioner et construire un pipline en utilisant les accéleration NXP semble bien plus complexe et demande plus d'étape que rpi camvid. de plus dans les deux cas de toute facon aucun des board ne support l'encodage MJPEG matériellement donc dans tout les cas ce travail sera donner au CPU. donc je pense que le plus raisonnable est de conserver le système sur la rpi qui est plus simple et rapide. peut etre qu une itération suivante pourrais se pencher sur la debix et tenter d'optimser le système sur son procs. 
+Avec 2 semaine restante je pense que le plus
+raisonable est de conserver le système marchant le mieux a éffectuer de meilleur mesure et les testes de ranges, puis la rédaction du rapport. 
+
+https://debix.io/wp-content/uploads/2025/09/debix-camera-module-user-manual-v1.2.pdf
+
+https://debix.io/wp-content/uploads/2025/12/camera-1300a-product-brief.pdf
+
+https://debix.io/wp-content/uploads/2025/09/image-install-guide-debix-model-a-b-infinity-v1.2.pdf
+
+https://debix.io/wp-content/uploads/2025/09/imx-linux-users-guide.pdf
+
+https://manuals.plus/debix/polyhex-model-a-single-board-computer-manual#google_vignette
+
+
+recherche d'une fonction permettant de setter la puissance avec antigrvity:
+
+Oui, il existe bien une fonction dans l'API WLAN du SDK Morse Micro (mm-iot-sdk) pour configurer et limiter la puissance de transmission.
+
+La fonction s'appelle **`mmwlan_override_max_tx_power()`** et elle est déclarée dans le fichier d'en-tête /mm-iot-sdk/framework/morselib/include/mmwlan.h#L401-L401.
+
+Voici sa signature :
+```c
+enum mmwlan_status mmwlan_override_max_tx_power(uint16_t tx_power_dbm);
+```
+
+### Remarques importantes concernant son utilisation :
+1. **Comportement :** Cette fonction permet de surcharger la puissance maximale de transmission (en `dBm`). Si vous passez `0`, la surcharge est désactivée et la puissance maximale autorisée par le domaine réglementaire (regulatory domain) pour le canal en cours sera utilisée.
+2. **Limite stricte :** Vous **ne pouvez pas** utiliser cette fonction pour augmenter la puissance d'émission au-delà de la limite légale imposée par le domaine réglementaire de la puce. Elle ne peut être utilisée que pour **réduire** (brider) la puissance d'émission. (Ouiiiii aller)
+3. **Moment de l'appel :** La fonction doit être appelée **après** l'initialisation du WLAN (c'est-à-dire après `mmwlan_init()`), mais elle ne prendra effet qu'au prochain changement de canal (par exemple, lors d'un scan ou de la connexion à un point d'accès AP). Elle renverra une erreur `MMWLAN_UNAVAILABLE` si le sous-système WLAN est déjà actif.
+
+### Vendredi 06.07
+
+mesure de la puissance après avoir ajouter cette fonction mais toujours 14dbm... 
+
+j'ai donc envoyer une question via un topic sur la section community de morsemicro.
+```text
+Hello,
+
+I’m currently developping a system using the MM8108-EKH05 on the TX side and the MM8108-EKH19 on the RX side.
+I’m having a hard time setting the transmission power to the maximum available (26dbm).
+
+I am currently stuck at exactly 14 dBm (25 mW).
+
+Here is my configuration:
+
+Country Code: Set to "US" in config.hjson.
+
+BCF: Set to bcf_mf15457.mbin and successfully flashed via OpenOCD/Python script.
+
+Channel: 28 / 916 MHz.
+
+Power Supply: USB-C 5V 3A.
+
+Measurement: Mini-Circuit Power Sensor (50 - 6000 MHz).
+
+I’v tried using mmwlan_override_max_tx_power(26); too but i’m getting the same result.
+
+here is my void app_init(void) for more context
+
+void app_init(void)
+{
+    printf("\n\n--- RPI -> STM32 -> HALOW ---\n\n");
+
+    SPI_Slave_Init();
+
+    HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+
+    // low QoS config
+    struct mmwlan_qos_queue_params fpv_qos = {
+        .aci = 3,         // ACI 3 = Voice (TOS 0xC0 - LwIP)
+        .aifs = 2,        // inter-trame waiting time
+        .cw_min = 1,      
+        .cw_max = 1,  
+        .txop_max_us = 0 
+    };
+
+    mmwlan_set_default_qos_queue_params(&fpv_qos, 1);
+    mmwlan_set_power_save_mode(MMWLAN_PS_DISABLED);
+
+    app_wlan_init();
+
+    mmwlan_override_max_tx_power(26);
+
+    mmipal_set_link_status_callback(link_status_callback);
+
+    printf("connection to the OpenWrt AP...\n");
+
+    app_wlan_start();
+
+    mmwlan_ate_override_rate_control(MMWLAN_MCS_1, MMWLAN_BW_8MHZ, MMWLAN_GI_NONE);
+    printf("8 MHz / MCS 1 setted.\n");
+
+
+    while (!is_network_ready) {
+        mmosal_task_sleep(10);
+    }
+
+    struct udp_pcb *pcb = init_udp_pcb();
+    if (pcb != NULL) {
+    	pcb->tos = 0xC0;
+        udp_broadcast_tx_start(pcb);
+    }
+
+    (void)get_mode;
+    (void)udp_broadcast_rx_start;
+}
+Thank you for your help,
+Nathan.T
+```
+### Mardi 07.07
+rédaction de rapport
+
+### Vendredi 10.07
+mesure de la puissance d'émission de l'EKH19 sur proposition de mm, on mesure bien 20dbm (attention, si on ping flood, il faut désactiver le mode "low noise" de l'appareil de mesure sinon on rate les spikes de puissance quand a lieu l'émission, donc il aussi préférable d'utiliser le mode graph).
+```bash
+root@MM8108_EKH19:~# iw dev wlan0 info
+Interface wlan0
+        ifindex 9
+        wdev 0x2
+        addr 0c:bf:74:00:25:ee
+        ssid MM8108_EKH19
+        type AP
+        wiphy 0
+        channel 112 (5560 MHz), width: 160 MHz, center1: 5570 MHz
+        txpower 20.00 dBm
+```
+pour émettre le ping flood.
+```bash
+root@MM8108_EKH19:~# ping -s 1400 192.168.12.2
+```
+même quand on essaie de modifier la puissance d'émission avec
+```bash
+root@MM8108_EKH19:~# iw dev wlan0 set txpower fixed 2600
+```
+la puissance reste identique...
+
+
+de plus j ai rechecker la taille des paquets avec 
+```bash
+root@MM8108_EKH19:~# tcpdump -i wlan0 -e -s 0
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on wlan0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+05:10:31.604061 0c:bf:74:00:43:31 (oui Unknown) > a4:bb:6d:f3:f8:ce (oui Unknown), ethertype IPv4 (0x0800), length 1442: 192.168.12.2.1337 > 192.168.12.10.1337: UDP, length 1400
+05:10:31.611530 0c:bf:74:00:43:31 (oui Unknown) > a4:bb:6d:f3:f8:ce (oui Unknown), ethertype IPv4 (0x0800), length 1442: 192.168.12.2.1337 > 192.168.12.10.1337: UDP, length 1400
+...
+```
+donc les paquets font toujours bien 1400 octets (contrairement a se que j avais vu avec une itération précédente a 556 octets).
+
+Record d'1min de vidéo en mjpeg en bougeant un peut la caméra. Avec la config exacte de ma gateway to spi pour trouver la taille moyenne d'une image. 
+```
+tb26@rpivtx:~/MJPEG $ rpicam-vid -t 60000 -n -o fpv_test_1min.mjpeg --width 320 --height 240 --framerate 60 --codec mjpeg --denoise off --exposure sport --metering centre --awb daylight --quality 8 --flush
+```
+le fichier fais  $\approx 11 \text{ MB}$ (soit environ $11.53 \times 10^6 \text{ octets}$) pour 60 secondes de vidéo à 60 Hz :
+
+**1. Poids moyen d'une image (Frame Size)**
+génération de 3600 images par minute.
+$$ \text{Taille moyenne} = \frac{11,534,336 \text{ octets}}{3600 \text{ images}} \approx 3204 \text{ octets / image} $$
+
+**2. Fragmentation sur le bus SPI et Wi-Fi (UDP Payload)**
+Puisque ton MTU applicatif (le payload UDP) est fixé à 1400 octets :
+$$ \text{Paquets par image} = \frac{3204}{1400} = 2.28 \rightarrow \mathbf{3 \text{ paquets UDP en moyenne}} $$
+
+**3. Bande passante requise (Throughput)**
+$$ \text{Débit} = \frac{11.53 \text{ MB}}{60 \text{ s}} \approx 192 \text{ KB/s} \rightarrow \mathbf{\approx 1.5 \text{ Mbps}} $$
+
+
+
+à faire: 
+- prendre une ou deux photo en extérieur pour présenter la qualité visuelle.
+- tester la fonction d'override pour voire si elle limite bien la puissance
+- parler de la debix dans le rapport donc update les schéma pour la montrer (mais btiévement parce que c'était pas fou)
+- peut être déplacer la partie sur la fragmentation de la vidéo et la taille de celle ci qui se trouve dans Itérations matérielles et analyse des performances ->
+Le défi du MJPEG : Fragmentation réseau et pont SPI intelligent dans leur anciennes section réspective au début du document  
+- Attention Incoérence et répétition dans les permiers chapitre, parce que j ai ajouter les nouvelles config freq,bw,latence de ping etc.
+
 
 ### Jeudi 23.07 avant 11h00
 **Rendu final du rapport**

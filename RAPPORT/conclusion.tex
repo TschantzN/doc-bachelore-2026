@@ -1,61 +1,48 @@
-\section{Conclusion intermédiaire}
+\section{Conclusion}
 
 Le pilotage de drones FPV (\textit{First Person View}) en environnement complexe se heurte depuis 
 toujours à l'incapacité des fréquences standards (2.4 GHz et 5.8 GHz) à pénétrer efficacement les 
-obstacles physiques. Ce travail de Bachelor vise à évaluer une solution de rupture technologique en
+obstacles physiques. Ce travail de Bachelor visait à évaluer une solution de rupture technologique en
 détournant la norme IEEE 802.11ah (Wi-Fi HaLow), opérant dans la bande Sub-1 GHz, pour y faire 
 transiter un flux vidéo en temps réel.
 
-À ce stade d'avancement du projet, l'architecture fondamentale du système est non seulement 
-établie, mais ses performances ont été démontrées et mesurées de manière rigoureuse.
+Au terme de ce projet, l'architecture fondamentale du système a non seulement été établie, mais elle 
+a été optimisée jusqu'à ses limites physiques et logicielles absolues pour répondre aux exigences 
+critiques du vol en immersion.
 
-\subsection{Bilan des réalisations}
-La première grande réussite de ce travail réside dans la maîtrise de la liaison radio HaLow. En 
-contournant les mécanismes d'acquittement de la couche MAC (utilisation de l'UDP Broadcast / mode No-ACK) 
-et en modifiant les configurations de routage, nous avons garanti un canal de transmission fluide et 
-déterministe. 
+\subsection{Bilan des réalisations et d'optimisation}
+La première grande réussite de ce travail réside dans la maîtrise et le détournement de la liaison radio HaLow. 
+L'approche itérative adoptée tout au long du projet a été déterminante. Si nos premières implémentations 
+en UDP \textit{Broadcast} couplées à l'encodeur standard H.264 ont permis de valider le concept, elles ont 
+surtout révélé un plafond de verre structurel : une latence résiduelle de 100 ms liée à la rétention 
+temporelle intrinsèque des codecs inter-trames et aux tampons des routeurs Wi-Fi.
 
-La conception d'un pont de communication matériel (SPI vers Wi-Fi) sur un microcontrôleur STM32, couplé 
-à un mécanisme de \textit{handshake}, a permis de synchroniser le trafic vidéo sans perte. 
-L'approche itérative adoptée a été déterminante : l'utilisation initiale d'une plateforme surpuissante 
-(Nvidia Jetson Nano) a permis de certifier les temps d'encodage via le traçage logiciel GStreamer et 
-d'écarter tout doute sur les performances de compression. 
+Pour briser ces limites, l'architecture a été radicalement refondue. Le passage à un codec \textit{intra-trame} 
+(MJPEG via un accès \textit{Bare-Metal} à l'ISP de la Raspberry Pi), couplé à un pont de communication logiciel 
+en C capable de fragmenter les images à la volée, a permis de supprimer toute rétention d'image. Sur le 
+plan réseau, le basculement en UDP \textit{Unicast} associé à un forçage matériel extrêmement agressif 
+de la Qualité de Service (WMM/EDCA) sur le microcontrôleur STM32 a garanti un accès instantané au canal radio. 
 
-Fort de cette validation de base, l'architecture a évolué pour se rapprocher du matériel. La configuration 
-retenue pour nos tests de bout en bout les plus récents repose ainsi sur des plateformes ARM : une Raspberry 
-Pi 4B en émission (TX) et une \textit{Compute Module 4} en réception (RX). L'analyse des latences des différents
-éléments de cette chaîne, confirmée par un test de déclencheur physique (bouton partagé), prouve que le transport 
-pur (transfert SPI, traitement MCU, temps de vol RF) s'effectue en \textbf{12 à 13 millisecondes}. La technologie 
-Sub-1 GHz n'est donc en rien un frein à la réactivité requise pour le pilotage.\newline\newline
+\subsection{Performances finales et validation du concept}
+Cette ingénierie de bas niveau a porté ses fruits. Là où une étude comparative sur un système de 
+transmission numérique Broadcast traditionnel (SDR BladeRF / DVB-T2) démontrait une latence 
+applicative inexploitable dépassant les 2000 ms, notre architecture sur mesure prouve la supériorité 
+d'un contrôle total de la chaîne d'acquisition.
 
-Les notes journalières, journal de travail et diagrammes de Gantt sont accessibles ici :
+Les mesures physiques ont prouvé que le transport matériel pur (transfert SPI, traitement MCU, et temps 
+de vol RF Sub-1 GHz) s'effectue en seulement \textbf{12.5 millisecondes}. En associant cet émetteur à une 
+station de réception finale optimisée (PC de diagnostic couplé à un écran 165 Hz pour s'affranchir de la 
+synchronisation verticale), la latence visuelle globale (\textit{Glass-to-Glass}) a été mesurée à une moyenne 
+exceptionnelle de \textbf{40 à 50 ms}, avec des pics récurrents à \textbf{30 ms}.
+
+L'objectif initial, qui fixait le seuil de viabilité pour un pilotage d'exploration NLOS à 80 ms, est 
+donc très largement dépassé. Ce travail de Bachelor valide définitivement la pertinence de la 
+technologie Wi-Fi HaLow pour la transmission vidéo ultra-basse latence, ouvrant de vastes perspectives 
+pour l'inspection industrielle, le sauvetage, et l'exploration robotique en milieux confinés. \newline\newline
+
+Les notes journalières, le journal de travail et les diagrammes de Gantt associés au développement 
+de ce projet sont documentés et accessibles à l'adresse suivante : \newline
 \url{https://github.com/TschantzN/doc-bachelore-2026}
-
-\newpage
-\subsection{Objectifs pour la phase finale}
-Si le lien radio a démontré d'excellentes performances intrinsèques sur des bancs de test isolés, la 
-latence "Glass-to-Glass" absolue mesurée actuellement sur le flux vidéo complet se situe entre 
-\textbf{130 ms et 140 ms}. Ce décalage met en évidence une latence résiduelle importante d'environ 
-120 ms, dont l'origine exacte reste à identifier et à prouver formellement.
-
-Les hypothèses de travail actuelles s'orientent principalement vers les extrémités de la chaîne : les files 
-d'attente internes de l'Image Signal Processor (ISP) de la caméra à l'acquisition (malgré les tests en
-boucle locale), ainsi que les tampons 
-logiciels de reconstruction réseau et la synchronisation verticale inhérente aux pilotes d'affichage 
-à la restitution. Bien que la faible latence mesurée lors du test de rebouclement vidéo semble écarter cette 
-dernière option, des investigations supplémentaires resteront nécessaires pour l'exclure définitivement. 
-Toutefois, le comportement du pont de communication lui-même (MCU et puce HaLow) 
-sous une charge vidéo prolongée et en conditions RF dégradées nécessitera également d'être poussé 
-plus loin pour écarter définitivement la piste d'un goulot d'étranglement réseau dynamique.
-
-Les semaines restantes avant le rendu final de ce travail de Bachelor seront donc dédiées à l'identification 
-formelle de chaque source de latence résiduelle dans le système. L'enjeu consistera à concevoir de nouveaux 
-protocoles de mesure pour isoler chaque sous-système, de la lentille de la caméra jusqu'à l'écran. L'objectif 
-ultime sera d'appliquer les optimisations nécessaires (contournement de l'ISP, affichage \textit{Bare-Metal} 
-strict, tests de stress réseau) afin de gommer ce délai, rapprochant ainsi le système des standards FPV 
-et validant la viabilité du Wi-Fi HaLow pour l'exploration par drone. De plus, la suite de ce travail permettra 
-d'approfondir l'analyse comparative des performances et de l'impact sur la latence des différents décodeurs et 
-encodeurs logiciels utilisés dans notre chaîne de traitement.
 
 \begin{flushright}
     \begin{minipage}{5cm}

@@ -9,13 +9,16 @@ pénétration, mais ses mécanismes natifs de fiabilité (acquittements MAC, ret
 induisent une latence et une gigue incompatibles avec les exigences strictes du vol en immersion.
 
 \textbf{Méthode :} Ce travail implémente une architecture de bout en bout forçant une transmission 
-unidirectionnelle. Un pont matériel (SPI vers microcontrôleur STM32) encapsule un flux vidéo 
-H.264 (optimisé via GStreamer) en UDP Broadcast sans accusé de réception, verrouillant le modem 
-radio sur une modulation robuste.
+dédiée au temps réel. Un pont matériel (SPI vers microcontrôleur STM32) encapsule un flux vidéo 
+(optimisé en \textit{Bare-Metal} via MJPEG) en UDP Unicast. Cette approche est couplée à un forçage 
+matériel de la Qualité de Service (QoS) pour écraser les délais d'accès au canal, verrouillant ainsi le 
+modem radio sur une modulation robuste à basse latence.
 
-\textbf{Résultat intermédiaire :} Les mesures démontrent une latence de transport radio pur d'environ 
-12.5 ms. La latence visuelle globale (\textit{Glass-to-Glass}) se situe actuellement entre 130 et 
-140 ms. La suite du projet visera à trouver la source de ce délai résiduel et à tenter de l'éliminer.
+\textbf{Résultat :} Après avoir isolé un temps de vol radio pur de l'ordre de 12.5 ms, l'approche itérative 
+a permis d'éliminer les lourds goulots d'étranglement inhérents à l'encodage vidéo traditionnel. 
+La latence visuelle globale absolue (\textit{Glass-to-Glass}) du système final a été mesurée à 
+\textbf{40-50 ms en moyenne}. Ces performances valident définitivement la viabilité 
+du Wi-Fi HaLow pour l'exploration par drone en milieux confinés.
 
 \section{Abstract - English}
 
@@ -26,11 +29,14 @@ standard frequencies (2.4 and 5.8 GHz) struggle to penetrate physical obstacles 
 penetration, but its native reliability mechanisms (MAC acknowledgments, retransmissions) introduce 
 latency and jitter incompatible with the strict requirements of immersive flight.
 
-\textbf{Method :} This work implements an end-to-end architecture forcing unidirectional transmission. 
-A hardware bridge (SPI to STM32 microcontroller) encapsulates an optimized H.264 video stream 
-(via GStreamer) into UDP Broadcast with no acknowledgments, locking the radio modem onto a robust 
-modulation scheme.
+\textbf{Method :} This work implements an end-to-end architecture tailored for absolute real-time 
+transmission. A hardware bridge (SPI to STM32 microcontroller) encapsulates a \textit{Bare-Metal} 
+optimized MJPEG video stream into UDP Unicast. This approach is combined with a hardware Quality of 
+Service (QoS) override to bypass channel access delays, locking the radio modem onto a robust, 
+low latency modulation scheme.
 
-\textbf{Intermediate Result :} Profiling demonstrates a pure radio transport latency of approximately 
-12.5 ms. The overall \textit{Glass-to-Glass} visual latency is currently between 130 and 140 ms. 
-The next phase of the project will focus on understanding and reducing this residual delay.
+\textbf{Result :} After isolating a pure radio transport time of approximately 12.5 ms, the iterative 
+approach successfully eliminated the heavy bottlenecks inherent to traditional video encoding. 
+The absolute overall \textit{Glass-to-Glass} visual latency of the final system was reduced to 
+\textbf{an average of 40-50 ms}. These performances definitively validate the viability 
+of Wi-Fi HaLow for drone exploration in confined environments.
