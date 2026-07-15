@@ -1,44 +1,28 @@
 \section{Conclusion}
-
 Le pilotage de drones FPV (\textit{First Person View}) en environnement complexe se heurte depuis 
 toujours à l'incapacité des fréquences standards (2.4 GHz et 5.8 GHz) à pénétrer efficacement les 
-obstacles physiques. Ce travail de Bachelor visait à évaluer une solution de rupture technologique en
-détournant la norme IEEE 802.11ah (Wi-Fi HaLow), opérant dans la bande Sub-1 GHz, pour y faire 
-transiter un flux vidéo en temps réel.
+obstacles physiques. Ce travail de Bachelor visait à évaluer une solution de rupture en détournant 
+la norme IEEE 802.11ah (Wi-Fi HaLow) pour y faire transiter un flux vidéo en temps réel sur la bande Sub-1 GHz. 
+Au terme de ce projet, l'architecture globale du système a été établie et optimisée jusqu'à ses limites 
+physiques et logicielles pour répondre aux exigences de réactivité du vol en immersion.
 
-Au terme de ce projet, l'architecture fondamentale du système a non seulement été établie, mais elle 
-a été optimisée jusqu'à ses limites physiques et logicielles absolues pour répondre aux exigences 
-critiques du vol en immersion.
+Le succès de ce travail repose sur un changement de paradigme logiciel dicté par la réalité des mesures. 
+L'approche initiale en H.264, bien que très économe en bande passante, s'est heurtée à une latence plancher 
+de 100 ms induite par la reconstruction temporelle des codecs inter-trames. Pour briser ce plafond de verre, 
+le système a été entièrement refondu autour d'un codec exclusivement intra-trame (MJPEG). Cette transition a 
+été rendue possible par l'élargissement de la bande passante radio (8 MHz, MCS 1) et le développement d'un 
+programme d'émission en C sur la Raspberry Pi assurant le découpage à la volée des images en paquets de 1400 octets. 
+L'utilisation de l'UDP Unicast couplée à un forçage agressif des paramètres d'accès au canal (QoS MAC) sur le 
+STM32 a finalement permis de supprimer tout délai de rétention réseau.
 
-\subsection{Bilan des réalisations et d'optimisation}
-La première grande réussite de ce travail réside dans la maîtrise et le détournement de la liaison radio HaLow. 
-L'approche itérative adoptée tout au long du projet a été déterminante. Si nos premières implémentations 
-en UDP \textit{Broadcast} couplées à l'encodeur standard H.264 ont permis de valider le concept, elles ont 
-surtout révélé un plafond de verre structurel : une latence résiduelle de 100 ms liée à la rétention 
-temporelle intrinsèque des codecs inter-trames et aux tampons des routeurs Wi-Fi.
+Ce travail de bachelor a permis d'obtenir des performances excellente. Les mesures physiques 
+ont prouvé que le transport matériel pur (transfert SPI, traitement MCU, et temps de vol RF) s'effectue en 
+seulement \textbf{12.5 millisecondes}. Mesurée sur un affichage à 165 Hz, la latence visuelle globale 
+(\textit{Glass-to-Glass}) s'établit entre \textbf{40 et 50 ms en moyenne}, avec des pointes récurrentes à 
+\textbf{30 ms}. L'objectif initial de viabilité fixé à 80 ms est largement dépassé, validant définitivement
+la pertinence du standard Wi-Fi HaLow pour le contrôle de drone en temps réel.
 
-Pour briser ces limites, l'architecture a été radicalement refondue. Le passage à un codec \textit{intra-trame} 
-(MJPEG via un accès \textit{Bare-Metal} à l'ISP de la Raspberry Pi), couplé à un pont de communication logiciel 
-en C capable de fragmenter les images à la volée, a permis de supprimer toute rétention d'image. Sur le 
-plan réseau, le basculement en UDP \textit{Unicast} associé à un forçage matériel extrêmement agressif 
-de la Qualité de Service (WMM/EDCA) sur le microcontrôleur STM32 a garanti un accès instantané au canal radio. 
-
-\subsection{Performances finales et validation du concept}
-Cette ingénierie de bas niveau a porté ses fruits. Là où une étude comparative sur un système de 
-transmission numérique Broadcast traditionnel (SDR BladeRF / DVB-T2) démontrait une latence 
-applicative inexploitable dépassant les 2000 ms, notre architecture sur mesure prouve la supériorité 
-d'un contrôle total de la chaîne d'acquisition.
-
-Les mesures physiques ont prouvé que le transport matériel pur (transfert SPI, traitement MCU, et temps 
-de vol RF Sub-1 GHz) s'effectue en seulement \textbf{12.5 millisecondes}. En associant cet émetteur à une 
-station de réception finale optimisée (PC de diagnostic couplé à un écran 165 Hz pour s'affranchir de la 
-synchronisation verticale), la latence visuelle globale (\textit{Glass-to-Glass}) a été mesurée à une moyenne 
-exceptionnelle de \textbf{40 à 50 ms}, avec des pics récurrents à \textbf{30 ms}.
-
-L'objectif initial, qui fixait le seuil de viabilité pour un pilotage d'exploration NLOS à 80 ms, est 
-donc très largement dépassé. Ce travail de Bachelor valide définitivement la pertinence de la 
-technologie Wi-Fi HaLow pour la transmission vidéo ultra-basse latence, ouvrant de vastes perspectives 
-pour l'inspection industrielle, le sauvetage, et l'exploration robotique en milieux confinés. \newline\newline
+\newline\newline
 
 Les notes journalières, le journal de travail et les diagrammes de Gantt associés au développement 
 de ce projet sont documentés et accessibles à l'adresse suivante : \newline

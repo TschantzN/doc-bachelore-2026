@@ -3,23 +3,23 @@
     \centering
     \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb4.png}
     \caption{(4) Interfaçage SPI}
-    \label{fig:complet_schematic_nb2}
+    \label{fig:complet_schematic_nb4}
 \end{figure}
 
-Le transfert du flux vidéo compressé entre le processeur d'acquisition (Jetson / RPi) et le modem radio
-(STM32) s'effectue via le bus matériel SPI. Cette étape est très importante car elle envoie les données
-au MCU pour l'émission RF.
+Le transfert du flux vidéo compressé entre le processeur d'acquisition (Raspberry Pi TX) et le modem radio 
+(STM32) s'effectue via le bus matériel SPI. Cette étape est critique car elle conditionne le rythme 
+d'envoi des données au MCU avant l'émission RF.
 
 \subsection{Identification du bus SPI matériel}
 Une attention particulière a dû être portée à la configuration physique de la liaison. Le SDK Morse Micro 
 ne supportant nativement aucun périphérique standard en dehors de la puce Wi-Fi, le routage exact du bus SPI 
 du microcontrôleur sur le connecteur d'extension n'était pas documenté dans le guide utilisateur de base.
 
-Pour résoudre cette inconnue, une analyse du dossier de conception officiel de la carte \textbf{EKH05} 
+Pour résoudre cette inconnue, une analyse du schéma de conception de la carte \textbf{EKH05} 
 \cite{MorseDesignPackage} a été menée afin d'identifier théoriquement les broches physiques et les pistes 
 reliées aux périphériques internes du processeur. Afin de valider de manière absolue ce schéma avant d'y 
-connecter l'ordinateur d'acquisition, une méthodologie de vérification simple a été effectuée : une 
-tension de 3,3 V a été appliquée sur les lignes d'entrée potentielles repérées, permettant de 
+connecter l'ordinateur d'acquisition, une vérification a été effectuée : une 
+tension de 3,3 V a été appliquée sur les lignes d'entrée repérées, permettant de 
 confirmer au multimètre la correspondance exacte du routage (\ref{tab:spi_mapping}).
 
 \begin{table}[htbp]
@@ -44,44 +44,85 @@ confirmer au multimètre la correspondance exacte du routage (\ref{tab:spi_mappi
 
 \newpage
 
-\subsection{Portage de l'application d'émission (De Python à C)}
-Initialement développé en Python pour valider le concept, le programme lisant la sortie de GStreamer pour 
-l'injecter sur le bus SPI a été entièrement réécrit en C. 
+\subsection{Développement de la Gateway SPI-MJPEG (C)}
+Le changement de paradigme vers le MJPEG a nécessité la réécriture complète du programme d'interfaçage en 
+C (situé entre l'outil de capture et le bus SPI). En H.264, le flux pouvait être "poussé" aveuglément. En 
+MJPEG, envoyer des morceaux bruts aléatoires à travers le réseau causait des plantages du décodeur 
+GStreamer à la réception, qui ne tolère aucune corruption de structure.
 
-Ce portage répondait à trois impératifs de temps réel :
+Le programme d'émission (voir code complet en \textbf{Annexe A}) agit désormais comme un véritable parseur actif :
 \begin{enumerate}
-    \item \textbf{Élimination de la gestion mémoire asynchrone :} Le \textit{Garbage Collector} de Python 
-    induit des micro-pauses aléatoires incompatibles avec la stabilité d'un flux FPV.
-    \item \textbf{Désactivation des caches de l'OS :} En C, la fonction \texttt{setvbuf(pipe, NULL, 
-    \_IONBF, 0)} a été utilisée pour forcer le descripteur de fichier reliant GStreamer au programme 
-    à fonctionner en mode "zéro-buffer" (flux tendu).
-    \item \textbf{Précision des horloges :} Remplacement des temporisations logicielles incertaines par 
-    des lectures de registres GPIO\index{GPIO} matériels quasi-instantanées.
+    \item \textbf{Isolation des images :} Il lit le flux continu depuis l'OS en mode non-bloquant et 
+    scanne les octets à la volée pour identifier les marqueurs standards du protocole JPEG : 
+    \texttt{0xFF 0xD8} (Début d'image - SOI) et \texttt{0xFF 0xD9} (Fin d'image - EOI).
+    \item \textbf{Slicing à 1400 octets :} Une fois une image complète isolée en RAM, il la fragmente 
+    strictement en paquets de 1400 octets. Une capture réseau (\texttt{tcpdump}) a permis de valider 
+    empiriquement que l'application respectait bien cette taille maximale.
+    \item \textbf{Padding de sécurité :} Si le dernier morceau de l'image fait moins de 1400 octets, 
+    le programme complète l'espace vide du tampon SPI avec des zéros (\texttt{0x00}). Le vrai marqueur 
+    de fin d'image (\texttt{0xFF 0xD9}) généré par la caméra étant déjà inclus et préservé dans les 
+    données utiles, le parseur GStreamer de réception (\texttt{jpegparse}) reconstruit la trame et ignore 
+    naturellement ce padding neutre sans provoquer d'erreur.
 \end{enumerate}
 
 \subsection{Contrôle de flux matériel (Handshake SPI)}
-Le transfert s'effectue sur le bus SPI à une fréquence d'horloge de 5 MHz. Mathématiquement, l'envoi 
-d'un paquet UDP contenant une charge utile de 1400 octets (soit 11 200 bits) à cette fréquence requiert 
+Le transfert s'effectue sur le bus SPI à une fréquence d'horloge poussée à \textbf{8 MHz}. Mathématiquement, 
+l'envoi d'un paquet UDP contenant une charge utile de 1400 octets (soit 11 200 bits) à cette fréquence requiert 
 un temps de transmission physique incompressible. Ce temps théorique se calcule ainsi :
-$$T_{SPI} = \frac{1400 \times 8\text{ bits}}{5\,000\,000\text{ bits/s}} = 0.00224\text{ s} = \mathbf{2.24\text{ ms}}$$
+$$T_{SPI} = \frac{1400 \times 8\text{ bits}}{8\,000\,000\text{ bits/s}} = 0.0014\text{ s} = \mathbf{1.40\text{ ms}}$$
 
-L'architecture UDP étant configurée sans acquittement, si l'ordinateur enchaîne l'envoi de ces paquets de 
-2.24 ms trop rapidement, la mémoire RAM du microcontrôleur STM32 déborde (\textit{Buffer Overrun}). 
+L'architecture UDP étant configurée sans acquittement logiciel, si l'ordinateur enchaîne l'envoi de ces paquets de 
+1.40 ms trop rapidement, la mémoire RAM du microcontrôleur STM32 déborde (\textit{Buffer Overrun}). 
 Des morceaux d'images sont écrasés avant même d'atteindre le module Wi-Fi, provoquant de sévères artefacts 
-visuels (effets de "bavure").
+visuels (effets de "bavure" ou de déchirement d'image).
 
 Pour pallier ce problème, un mécanisme de \textit{Handshake} matériel a été implémenté via une broche de 
-signalisation dédiée (ex: GPIO 78 sur Jetson vers PD15 sur STM32) :
+signalisation dédiée (GPIO 24 sur la Raspberry Pi vers PD15 sur le STM32) :
 
 \begin{lstlisting}[language=C]
-// Extrait du controle de flux materiel (Cote Linux)
-do {
-    lseek(gpio_fd, 0, SEEK_SET);
-    read(gpio_fd, &gpio_val, 1);
-} while (gpio_val == '0'); // Bloque tant que le STM32 est occupe
+// Attente active que le STM32 soit PRET (Broche a 1)
+while ((* (gpio + 13) & (1 << GPIO_PIN)) == 0) {
+    timeout_counter++;
+    if (timeout_counter > 2000000) { return 0; }
+}
 \end{lstlisting}
 
 Le processus est le suivant : le STM32 abaisse ce signal (niveau BAS) dès qu'il reçoit un paquet de 1400 octets 
 via l'interruption SPI. Il ne le relève (niveau HAUT) que lorsque la couche réseau LwIP a fini de transférer 
-le paquet au module Wi-Fi HaLow. Cette synchronisation garantit un flux vidéo propre, dictant la cadence 
-de l'encodeur sans aucune perte interne au système.
+le paquet au module Wi-Fi HaLow. Cette synchronisation matérielle garantit un flux vidéo propre, dictant la cadence 
+de l'émetteur sans aucune perte interne au système.
+
+\subsection{Optimisation de l'ordonnancement OS et Overclocking}
+Afin de garantir un comportement strictement déterministe et d'éliminer la gigue (\textit{jitter}) 
+introduite par l'ordonnanceur multitâche du noyau Linux, deux optimisations système agressives ont été 
+appliquées sur la Raspberry Pi (TX).
+
+\subsubsection{Overclocking et verrouillage des fréquences}
+Par défaut, le noyau Linux de la Raspberry Pi adapte dynamiquement la fréquence du processeur en fonction de 
+la charge et de la température pour économiser l'énergie. Ce comportement dynamique génère des variations de 
+performances et introduit des micro-saccades imprévisibles lors du traitement des interruptions et de l'envoi 
+des blocs de données sur le bus SPI.
+
+Pour figer le système dans son état de performance maximal, la configuration de démarrage \newline (\texttt{/boot/firmware/config.txt}) 
+a été modifiée pour overclocker le processeur ARM à une fréquence stable de \textbf{2.0 GHz} (\texttt{arm\_freq=2000}). De plus, 
+le gouverneur CPU de Linux a été configuré sur le mode \textit{Performance} pour interdire toute baisse de fréquence 
+(voir les détails et le fichier de configuration complet en \textbf{Annexe B}).
+
+\subsubsection{Isolation du cœur CPU}
+Pour s'assurer que le programme d'émission en C (\texttt{gateway\_spi.c}) et la capture caméra (\texttt{rpicam-vid}) 
+ne soient jamais interrompus par des tâches de fond de l'OS (telles que la gestion des paquets système, des démons 
+ou des entrées/sorties), le cœur numéro 3 du processeur ARM Cortex-A72 a été totalement isolé du planificateur (\textit{scheduler}) 
+de Linux.
+
+Cette isolation a été réalisée en ajoutant l'argument de démarrage \texttt{isolcpus=3} dans le fichier d'initialisation du noyau (\texttt{/boot/firmware/cmdline.txt}). 
+Lors du démarrage, le système d'exploitation s'exécute exclusivement sur les cœurs 0, 1 et 2. Notre exécutable en C est 
+alors lancé en forçant son affinité matérielle sur le cœur 3 à l'aide de l'utilitaire \texttt{taskset}, tout en lui attribuant 
+la priorité d'ordonnancement maximale (\texttt{nice -n -20}) :
+
+\begin{lstlisting}[language=bash]
+# Lancement de la gateway sur le coeur isole 3 avec priorite maximale
+sudo taskset -c 3 nice -n -20 ./gateway_spi
+\end{lstlisting}
+
+Cette approche se rapprochant d'un fonctionnement \textit{Bare-Metal} garantit que le cœur 3 est dédié à 100 \% 
+au parsing des images et aux transactions SPI matérielles. Cela a permis lorsque l'OS redistribuait les processus en tâche de fond.

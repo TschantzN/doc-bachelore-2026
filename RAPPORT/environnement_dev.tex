@@ -89,17 +89,3 @@ le support de la cible \texttt{mm-mm8108-ekh05}. \newline
 Cette mise à jour a permis de rediriger le script vers le fichier de calibration 
 exact de la puce (\texttt{bcf\_mf08651\_us.mbin}). Combiné à l'ajustement du fichier \texttt{config.hjson} 
 pour cibler la région "US", la puce radio a pu démarrer avec succès.\newline
-
-Le module a été sciemment configuré pour cibler la région "US" (États-Unis, norme FCC sur la bande 
-des 915 MHz) au lieu du domaine européen par défaut (norme ETSI sur la bande des 868 MHz). Ce choix 
-est basé par les contraintes de partage du spectre radio. La réglementation européenne impose des 
-règles strictes telles que le \textit{Listen Before Talk} (LBT) et des limites sévères de 
-\textit{Duty Cycle} (temps de transmission maximal). Ces mécanismes forcent le module radio à 
-retenir ou espacer ses paquets pour écouter si le canal est libre. \newline
-
-Lors de nos tests initiaux, ces bridages réglementaires faisaient exploser la latence réseau 
-de base à environ 670 ms. Le passage sur le standard américain permet de désactiver ces restrictions 
-d'émission. Bien que cette configuration soit réservée à un cadre expérimental, elle était 
-indispensable pour ce travail de Bachelor afin de mesurer les performances brutes et réelles de 
-la puce (ramenant la latence radio autour de 3 à 5 ms, testée par ping), indépendamment des 
-limitations légales.

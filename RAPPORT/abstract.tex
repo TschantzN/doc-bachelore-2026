@@ -8,17 +8,17 @@ les obstacles physiques (conditions NLOS).
 pénétration, mais ses mécanismes natifs de fiabilité (acquittements MAC, retransmissions) 
 induisent une latence et une gigue incompatibles avec les exigences strictes du vol en immersion.
 
-\textbf{Méthode :} Ce travail implémente une architecture de bout en bout forçant une transmission 
-dédiée au temps réel. Un pont matériel (SPI vers microcontrôleur STM32) encapsule un flux vidéo 
-(optimisé en \textit{Bare-Metal} via MJPEG) en UDP Unicast. Cette approche est couplée à un forçage 
-matériel de la Qualité de Service (QoS) pour écraser les délais d'accès au canal, verrouillant ainsi le 
-modem radio sur une modulation robuste à basse latence.
+\textbf{Méthode :} Ce travail implémente une architecture de bout en bout optimisée pour le temps réel. 
+Un programme en C développé sur la Raspberry Pi isole et fragmente activement les images d'un flux vidéo 
+MJPEG natif en paquets autonomes, transmis via SPI à un microcontrôleur STM32. La liaison radio 
+est configurée en UDP Unicast sur une modulation fixe et robuste (MCS 1, 8 MHz), tandis que les paramètres 
+d'accès au canal de la Qualité de Service (QoS MAC) du modem sont forcés pour éliminer les temps d'attente 
+inter-trames.
 
 \textbf{Résultat :} Après avoir isolé un temps de vol radio pur de l'ordre de 12.5 ms, l'approche itérative 
-a permis d'éliminer les lourds goulots d'étranglement inhérents à l'encodage vidéo traditionnel. 
-La latence visuelle globale absolue (\textit{Glass-to-Glass}) du système final a été mesurée à 
-\textbf{40-50 ms en moyenne}. Ces performances valident définitivement la viabilité 
-du Wi-Fi HaLow pour l'exploration par drone en milieux confinés.
+a permis d'éliminer les lourds goulots d'étranglement applicatifs. La latence visuelle globale absolue 
+(\textit{Glass-to-Glass}) du système final s'établit entre \textbf{40 et 50 ms en moyenne}. Ces performances 
+dépassent l'objectif d'acceptabilité de 80 ms et valident la viabilité du Wi-Fi HaLow pour le pilotage en milieu confiné.
 
 \section{Abstract - English}
 
@@ -30,13 +30,14 @@ penetration, but its native reliability mechanisms (MAC acknowledgments, retrans
 latency and jitter incompatible with the strict requirements of immersive flight.
 
 \textbf{Method :} This work implements an end-to-end architecture tailored for absolute real-time 
-transmission. A hardware bridge (SPI to STM32 microcontroller) encapsulates a \textit{Bare-Metal} 
-optimized MJPEG video stream into UDP Unicast. This approach is combined with a hardware Quality of 
-Service (QoS) override to bypass channel access delays, locking the radio modem onto a robust, 
-low latency modulation scheme.
+transmission. A custom C program running on the Raspberry Pi actively isolates and fragments 
+native MJPEG video frames into autonomous packets, which are transmitted over SPI to a STM32 microcontroller. 
+The radio link is configured using UDP Unicast on a robust, fixed modulation scheme (MCS 1, 8 MHz), 
+while the modem's MAC Quality of Service (QoS) channel access parameters are forced to eliminate 
+inter-frame waiting times.
 
 \textbf{Result :} After isolating a pure radio transport time of approximately 12.5 ms, the iterative 
-approach successfully eliminated the heavy bottlenecks inherent to traditional video encoding. 
-The absolute overall \textit{Glass-to-Glass} visual latency of the final system was reduced to 
-\textbf{an average of 40-50 ms}. These performances definitively validate the viability 
-of Wi-Fi HaLow for drone exploration in confined environments.
+approach successfully eliminated heavy application-level bottlenecks. The absolute overall 
+\textit{Glass-to-Glass} visual latency of the final system ranges between \textbf{40 and 50 ms on average}. 
+These performances surpass the initial 80 ms target and definitively validate the viability of Wi-Fi HaLow 
+for drone piloting in confined environments.
