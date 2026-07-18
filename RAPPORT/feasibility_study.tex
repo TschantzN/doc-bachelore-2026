@@ -14,7 +14,8 @@ sont accessibles (comme le choix du canal ou de la largeur de bande), l'activati
 ou le verrouillage strict du MCS ne sont pas exposés par les utilitaires standards 
 (tels que \texttt{iw}, \texttt{morse\_cli} ou \texttt{hostapd}). L'investigation s'est donc orientée 
 vers le reverse engineering et l'analyse du code source des pilotes fournis par Morse Micro, tant pour 
-l'environnement FreeRTOS (Émetteur embarqué) que pour l'environnement Linux (Routeur relais).
+l'environnement FreeRTOS (Émetteur embarqué) que pour l'environnement Linux (Routeur relais) pour trouver
+le moyen de modifier ces paramètres.
 
 \subsection{Faisabilité côté Émetteur (FreeRTOS / STM32)}
 L'émetteur (TX), chargé de récupérer la vidéo et d'émettre les ondes radio depuis le drone, repose sur 
@@ -25,7 +26,8 @@ a permis d'identifier les leviers d'action suivants :
     \item \textbf{Contrôle du MCS :} L'analyse des bibliothèques a mis en évidence la fonction interne 
     \texttt{mmwlan\_ate\_override\_rate\_control()} issue du fichier d'en-tête \texttt{mmwlan.h}. 
     Cette fonction de test (ATE) permet de verrouiller dynamiquement la bande passante et le MCS 
-    directement dans le code source de l'application en C.
+    directement dans le code source de l'application en C. C'est cette méthode applicative directe 
+    qui a été retenue et validée dans l'architecture finale pour imposer le MCS 1 à l'émetteur.
     \item \textbf{Activation du LDPC :} L'inspection des configurations internes, notamment celles 
     liées au service \texttt{wpa\_supplicant} (\texttt{config\_ssid.h}), indique que la fonctionnalité 
     LDPC est activée par défaut par le pilote lors de la négociation de la connexion.
@@ -34,9 +36,10 @@ a permis d'identifier les leviers d'action suivants :
 \subsection{Faisabilité côté Récepteur (Linux / OpenWrt)}
 Le relais radio, configuré en point d'accès (Access Point, AP) au sol pour réceptionner le flux, 
 repose sur une architecture Linux (OpenWrt). L'analyse du code source du pilote noyau 
-(\textit{kernel driver}) a révélé les éléments suivants :
+officiel de Morse Micro (\texttt{morse\_driver}) a permis d'isoler les fichiers clés au sein du répertoire \texttt{/core/} :
+
 \begin{itemize}
-    \item \textbf{Contrôle du MCS :} Les fichiers sources \texttt{rc.c} et \texttt{command.c} contiennent 
+    \item \textbf{Contrôle du MCS :} Les fichiers sources \texttt{core/rc.c} et \texttt{core/command.c} contiennent 
     des structures permettant de désactiver l'algorithme d'adaptation de débit \newline  
     (\texttt{enable\_fixed\_rate}) et d'imposer un MCS fixe (par exemple, MCS 2). Des tests de 
     compilation croisée (\textit{cross-compilation}) du noyau ont confirmé que ces modifications 
@@ -47,7 +50,7 @@ repose sur une architecture Linux (OpenWrt). L'analyse du code source du pilote 
     d'intercepter les trames pour manipuler le registre \texttt{morse\_ratecode} 
     (en forçant les bits B17 et B18 du champ SIG-1). Cependant, les expérimentations ont démontré qu'il 
     est techniquement impossible d'appliquer et de maintenir ces paramètres matériels bas niveau tant 
-    que le routeur n'est pas formellement connecté à un client. 
+    que le routeur n'est pas formellement connecté à un client.
     
     La preuve formelle d'une injection manuelle du LDPC n'a pas pu être clairement établie
     et a donc été écartée de l'implémentation finale. 
@@ -56,10 +59,11 @@ repose sur une architecture Linux (OpenWrt). L'analyse du code source du pilote 
     du postulat techniquement fondé que le contrôleur radio l'exploite de manière native.
 \end{itemize}
 
+
 \subsection{Conclusion de la faisabilité}
-L'étude démontre que l'objectif de manipulation de la couche physique est réalisable sur les points 
-critiques. S'il s'est avéré impraticable de forger manuellement chaque en-tête MAC pour imposer le 
-LDPC en raison de la machine d'états du standard Wi-Fi, l'accès au code source du SDK FreeRTOS et 
-des pilotes Linux permet d'appliquer les surcharges (\textit{overrides}) nécessaires pour verrouiller 
-l'utilisation d'un MCS bas. Ces découvertes valident la faisabilité d'une liaison radio déterministe, 
-prérequis absolu pour notre système vidéo.
+L'exploration en profondeur des pilotes Linux s'est révélée particulièrement interéssante pour comprendre les mécanismes 
+de bas niveau et valider le comportement de la puce radio face aux contraintes de la norme 802.11ah. Néanmoins, les essais 
+expérimentaux ont démontré qu'une modification du pilote noyau côté récepteur était superflue. Le standard 
+Wi-Fi dictant que les paramètres de modulation physiques d'une trame sont imposés par l'émetteur, le forçage du 
+MCS 1 appliqué directement via le code applicatif du STM32 (TX) suffit à verrouiller l'intégralité 
+du lien radio descendant. L'objectif peut donc être atteint uniquement en configurant l'émetteur embarqué.

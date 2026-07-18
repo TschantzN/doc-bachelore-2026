@@ -71,11 +71,11 @@ L'analyse du fichier binaire obtenu a permis d'établir le profilage mathématiq
     \item \textbf{Bande passante requise (Throughput) :} Le débit réel consommé par le flux vidéo se calcule en divisant le poids total par le temps d'acquisition :
     $$\text{Bande passante} = \frac{11.53 \text{ Mo} \times 8 \text{ bits}}{60 \text{ s}} \approx \mathbf{1.53 \text{ Mbps}}$$
 \end{enumerate}
-Cette résolution et ce framerate ont été trouvés de manière empirique ; c'est le « sweetspot » auquel la vidéo reste fluide avec
+Cette résolution (320x240) et ce framerate (60 fps) ont été trouvés de manière empirique ; c'est le « sweetspot » auquel la vidéo reste fluide avec
 une qualité acceptable pour l'utilisation. Au-delà de ces paramètres, des pertes sont observées ; on peut donc en déduire que $1.53 \text{ Mbps}$ est la limite de charge utile du système.
 
 Ce profilage démontre que l'image MJPEG moyenne (3204 octets) dépasse la taille maximale de la charge 
-utile de nos paquets (MTU applicative fixée à 1400 octets). Une image est donc segmentée en moyenne en \textbf{3 paquets UDP} ($3204 / 1400 \approx 2.28 \rightarrow 3$ paquets). 
+utile de nos paquets (MTU applicative fixée à 1400 octets, donc légérement inférieur à la taille maximale d'une trame Ethernet standard qui est de 1500 octets). Une image est donc segmentée en moyenne en \textbf{3 paquets UDP} ($3204 / 1400 \approx 2.28 \rightarrow 3$ paquets). 
 
 \newpage
 

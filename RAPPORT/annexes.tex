@@ -337,7 +337,7 @@ int main() {
 \end{lstlisting}
 
 
-\section{Code de la Gateway active finale (Raspberry Pi TX)}
+\section{Code de la Gateway finale (Raspberry Pi TX)}
 \label{annexe:gateway_spi}
 Le code source suivant présente l'implémentation finale en C de notre gateway d'acquisition active. Ce programme lit le flux vidéo MJPEG en continu depuis l'ISP de la caméra, identifie à la volée les délimiteurs JPEG, fragmente les trames en paquets de 1400 octets, et gère le handshake matériel avec le STM32 pour s'adapter dynamiquement au débit utile du lien radio.
 
@@ -364,12 +364,12 @@ void setup_gpiomem() {
     if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
     gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
     close(mem_fd);
-    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en entree
+    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en input
 }
 
 int wait_for_stm32_ready() {
     int timeout_counter = 0;
-    // Attente que le STM32 soit PRET (Broche a 1)
+    // Attente que le STM32 soit ready
     while ((* (gpio + 13) & (1 << GPIO_PIN)) == 0) {
         timeout_counter++;
         if (timeout_counter > 2000000) { return 0; }
@@ -393,7 +393,7 @@ int main() {
     ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
     ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
 
-    // Lancement de la capture MJPEG (320x240, 60 FPS, Qualite 8)
+    // 240p60
     const char *cmd = "rpicam-vid -t 0 -n -o - --width 320 --height 240 --framerate 60 "
                       "--codec mjpeg --denoise off --exposure sport --metering centre "
                       "--awb daylight --quality 8 --flush";
@@ -424,7 +424,7 @@ int main() {
         .cs_change = 0,
     };
 
-    printf(">>> Routage SPI actif : Anti-Flicker & Handshake materiel\n");
+    printf(">>> Routage SPI actif\n");
 
     while (1) {
         int n = read(pipe_fd, recv_buf + recv_len, RING_BUFFER_SIZE - recv_len);
@@ -471,7 +471,6 @@ int main() {
 
                     memcpy(spi_buffer, frame_buffer + bytes_sent, to_send);
 
-                    // Padding neutre avec des zeros si le morceau est plus petit que la MTU SPI (1400 octets)
                     if (to_send < CHUNK_SIZE) {
                         memset(spi_buffer + to_send, 0x00, CHUNK_SIZE - to_send);
                     }
@@ -482,18 +481,17 @@ int main() {
                             break;
                         }
 
-                        // Handshake determiniteste (Acquittement de reception du STM32)
                         int ack_timeout = 0;
                         while ((* (gpio + 13) & (1 << GPIO_PIN)) != 0) {
                             ack_timeout++;
-                            if (ack_timeout > 50000) break; // Securite anti-blocage
+                            if (ack_timeout > 50000) break; // Sécurité
                         }
 
                         drop_counter = 0;
                     } else {
                         drop_counter++;
                         if (drop_counter == 1 || drop_counter % 120 == 0) {
-                            printf("[ATTENTION] Timeout STM32 ! (%d paquets jetes)\n", drop_counter);
+                            printf("[ATTENTION] Timeout STM32 ! (%d paquets droper)\n", drop_counter);
                         }
                         frame_corrupted = 1;
                         break;
@@ -515,6 +513,7 @@ int main() {
     close(spi_fd);
     return 0;
 }
+
 \end{lstlisting}
 
 
@@ -523,35 +522,48 @@ int main() {
 Le code C ci-dessous présente le module d'intégration principal embarqué sur le microcontrôleur STM32U5. Il s'occupe d'initialiser le bus SPI esclave à 8 MHz, d'appliquer le profil de QoS agressif (ACI 3 / Voice) sur les files d'attente du modem Wi-Fi HaLow, et de router sans traitement les paquets SPI directement vers la pile réseau LwIP en UDP Unicast.
 
 \begin{lstlisting}[language=C]
+/*
+ * Copyright 2021-2023 Morse Micro
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+
+
 #include <string.h>
 #include <endian.h>
 #include "mmosal.h"
 #include "mmwlan.h"
 #include "mmconfig.h"
+
 #include "mmipal.h"
 #include "lwip/icmp.h"
 #include "lwip/tcpip.h"
 #include "lwip/udp.h"
 #include "lwip/netif.h"
+
+
 #include "mm_app_common.h"
 #include "stm32u5xx_hal.h"
 
+// --- SPI ---
 #define SPI_PAYLOAD_SIZE 1400
-#define DEFAULT_UDP_PORT 1337
 
 SPI_HandleTypeDef hspi1;
 uint8_t spi_rx_buffer[SPI_PAYLOAD_SIZE];
 volatile bool spi_packet_received = false;
+// ---------------------
 
-// Variables de Profilage DWT
+
+// --- Variables de Profilage DWT ---
 volatile uint32_t dwt_start = 0;
 volatile uint32_t dwt_end = 0;
 volatile uint32_t mcu_cycles = 0;
-extern uint32_t SystemCoreClock; // 160 MHz (160000000 Hz)
+extern uint32_t SystemCoreClock; // Fourni par le système STM32 (ex: 160000000 pour 160 MHz)
 
 static volatile bool is_network_ready = false;
 
-// Callback du statut de liaison radio
+/* Callback pour savoir quand la connexion est prete*/
 static void link_status_callback(const struct mmipal_link_status *link_status)
 {
     if (link_status->link_state == MMIPAL_LINK_UP) {
@@ -560,55 +572,71 @@ static void link_status_callback(const struct mmipal_link_status *link_status)
     }
 }
 
-// Lancement de la transmission et du pont réseau
-static void udp_unicast_tx_start(struct udp_pcb *pcb)
-{
-    ip_addr_t dest_ip;
-    IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 10); // Station de reception final
 
-    // Activation du compteur de cycles materiel ARM DWT
+
+static void udp_broadcast_tx_start(struct udp_pcb *pcb)
+{
+    //err_t err;
+
+    ip_set_option(pcb, SOF_BROADCAST);
+    ip_addr_t dest_ip;
+    IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 10);
+
+    // --- ACTIVATION DU COMPTEUR DE CYCLES DWT ---
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+   	DWT->CYCCNT = 0;
+   	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
     printf(">>> PONT SPI-WIFI ACTIVE ! En attente de la Rpi... <<<\n");
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET); // Indique "PRET" a la RPi
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
     uint32_t packet_counter = 0;
+        while (1)
+        {
+            if (spi_packet_received) {
 
-    while (1)
-    {
-        if (spi_packet_received) {
-            struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, SPI_PAYLOAD_SIZE, PBUF_REF);
-            if (p != NULL) {
-                p->payload = (void *)spi_rx_buffer;
+            	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, SPI_PAYLOAD_SIZE, PBUF_REF);
+            	if (p != NULL) {
+            	    p->payload = (void *)spi_rx_buffer;
 
-                LOCK_TCPIP_CORE();
-                udp_sendto(pcb, p, &dest_ip, 1337);
-                UNLOCK_TCPIP_CORE();
+            	    LOCK_TCPIP_CORE();
+            	    udp_sendto(pcb, p, &dest_ip, 1337);
+            	    UNLOCK_TCPIP_CORE();
 
-                pbuf_free(p);
+            	    pbuf_free(p);
+            	}
+
+            	// --- ARRÊT DU CHRONO ---
+            	dwt_end = DWT->CYCCNT;
+            	mcu_cycles = dwt_end - dwt_start;
+
+            	// Affichage 1 fois tous les 100 paquets (pour ne pas bloquer le CPU avec l'UART)
+            	if ((packet_counter++ % 100) == 0) {
+            	    // SystemCoreClock vaut 160000000 (160 MHz)
+            	    uint32_t freq_mhz = SystemCoreClock / 1000000;
+            	    uint32_t time_us = mcu_cycles / freq_mhz;
+
+            		printf("[Profilage] Temps de traitement MCU : %lu us (%lu cycles)\n", time_us, mcu_cycles);
+            	}
+
+                spi_packet_received = false;
+
+                // STM32 écoute
+                HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
+                HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+
+            } else {
+               // mmosal_task_sleep(1);
             }
-
-            // Arret du chronometrage DWT
-            dwt_end = DWT->CYCCNT;
-            mcu_cycles = dwt_end - dwt_start;
-
-            // Affichage diagnostique toutes les 300 trames pour eviter l'asphyxie UART
-            if ((packet_counter++ % 300) == 0) {
-                uint32_t freq_mhz = SystemCoreClock / 1000000;
-                uint32_t time_us = mcu_cycles / freq_mhz;
-                printf("[Profilage] Temps traitement MCU : %lu us (%lu cycles)\n", time_us, mcu_cycles);
-            }
-
-            spi_packet_received = false;
-
-            // Relance l'attente d'interruption SPI et releve le Handshake
-            HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
-            HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET); // Handshake pret
         }
-    }
 }
 
+/**
+ * Initialize the UDP protocol control block. Binds to @ref DEFAULT_UDP_PORT
+ *
+ * @note If the parameters are set in the config store they will be used.
+ *
+ * @return Reference to the pcb is successfully initialized else NULL
+ */
 static struct udp_pcb *init_udp_pcb(void)
 {
     struct udp_pcb *pcb = NULL;
@@ -623,52 +651,65 @@ static struct udp_pcb *init_udp_pcb(void)
 
 void SPI_Slave_Init(void)
 {
+    // 1. Activer les horloges du SPI1, du Port E(SPI) et port D (Spare GPIO)(go no go jetson)
     __HAL_RCC_SPI1_CLK_ENABLE();
     __HAL_RCC_GPIOE_CLK_ENABLE();
     __HAL_RCC_GPIOD_CLK_ENABLE();
 
+    // D10(PE12), D13(PE13), D12(PE14) et D11(PE15)
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF5_SPI1; 
+
+    GPIO_InitStruct.Alternate = GPIO_AF5_SPI1; // Sur U5, Port E = SPI1 (AF5) !
     HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
+    // Config SPI1
     hspi1.Instance = SPI1;
     hspi1.Init.Mode = SPI_MODE_SLAVE;
     hspi1.Init.Direction = SPI_DIRECTION_2LINES;
     hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
     hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
     hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+
+    // CS sur D10
     hspi1.Init.NSS = SPI_NSS_HARD_INPUT;
+
     hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
     hspi1.Init.TIMode = SPI_TIMODE_DISABLED;
     hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLED;
+    hspi1.Init.CRCPolynomial = 7;
 
     if (HAL_SPI_Init(&hspi1) != HAL_OK) {
-        printf("ERREUR : Echec initialisation SPI1 !\n");
+    	printf("ERREUR : Echec initialisation SPI1 !\n");
+	} else {
+        printf("SPI Esclave (SPI1) initialise sur PE12 a PE15 !\n");
     }
 
-    HAL_NVIC_SetPriority(SPI1_IRQn, 5, 0);
-    HAL_NVIC_EnableIRQ(SPI1_IRQn);
+        // --- LES 2 LIGNES MANQUANTES POUR LE MODE '_IT' --- mode IT ?
+	HAL_NVIC_SetPriority(SPI1_IRQn, 5, 0);
+	HAL_NVIC_EnableIRQ(SPI1_IRQn);
 
-    // Initialisation de la broche Handshake (PD15)
-    GPIO_InitTypeDef GPIO_InitStruct_Handshake = {0};
-    GPIO_InitStruct_Handshake.Pin = GPIO_PIN_15;
-    GPIO_InitStruct_Handshake.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct_Handshake.Pull = GPIO_NOPULL;
-    GPIO_InitStruct_Handshake.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct_Handshake);
+	// Initialisation de la broche Handshake (PD15) (Go no go jetson)
+	GPIO_InitTypeDef GPIO_InitStruct_Handshake = {0};
+	GPIO_InitStruct_Handshake.Pin = GPIO_PIN_15;
+	GPIO_InitStruct_Handshake.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct_Handshake.Pull = GPIO_NOPULL;
+	GPIO_InitStruct_Handshake.Speed = GPIO_SPEED_FREQ_HIGH;
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct_Handshake);
 }
-
-// Interruption de reception complete SPI
+// Quand le STM32 a reçu un paquet
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     if (hspi->Instance == SPI1) {
-        dwt_start = DWT->CYCCNT; // Demarre le chrono DWT immediatement
-        HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET); // Abaisse le Handshake (occupe)
+    	// Démarrer le chrono
+    	dwt_start = DWT->CYCCNT;
+    	// mesure
+    	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
         spi_packet_received = true;
+        //HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE); //ca faisait un double receive donc erreur -> donc un peut de lantence en plus
     }
 }
 
@@ -677,34 +718,44 @@ void SPI1_IRQHandler(void)
     HAL_SPI_IRQHandler(&hspi1);
 }
 
+
+/**
+ * Main entry point to the application. This will be invoked in a thread once operating system
+ * and hardware initialization has completed. It may return, but it does not have to.
+ */
 void app_init(void)
 {
-    printf("\n\n--- PONT EMETTEUR FPV : RPI -> STM32 -> HALOW ---\n\n");
+    printf("\n\n--- RPI -> STM32 -> HALOW ---\n\n");
 
     SPI_Slave_Init();
+
     HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
 
-    // Configuration QoS ultra-agressive (ACI 3 / Voice)
+    // low QoS config
     struct mmwlan_qos_queue_params fpv_qos = {
-        .aci = 3,         
-        .aifs = 2,        
+        .aci = 3,         // ACI 3 = Voice (TOS 0xC0 - LwIP)
+        .aifs = 2,        // inter-trame waiting time
         .cw_min = 1,
         .cw_max = 1,
         .txop_max_us = 0
     };
 
     mmwlan_set_default_qos_queue_params(&fpv_qos, 1);
-    mmwlan_set_power_save_mode(MMWLAN_PS_DISABLED); // Desactivation de la veille radio
+    mmwlan_set_power_save_mode(MMWLAN_PS_DISABLED);
 
     app_wlan_init();
+
+    //mmwlan_override_max_tx_power(26);
+
     mmipal_set_link_status_callback(link_status_callback);
 
     printf("Connexion a l'AP OpenWrt en cours...\n");
+
     app_wlan_start();
 
-    // Forcage radio (8 MHz de largeur de bande, MCS 1 robuste)
     mmwlan_ate_override_rate_control(MMWLAN_MCS_1, MMWLAN_BW_8MHZ, MMWLAN_GI_NONE);
-    printf("Parametrage radio applique : 8 MHz / MCS 1 force.\n");
+    printf("forcage OK : 8 MHz / MCS 1 force.\n");
+
 
     while (!is_network_ready) {
         mmosal_task_sleep(10);
@@ -712,10 +763,11 @@ void app_init(void)
 
     struct udp_pcb *pcb = init_udp_pcb();
     if (pcb != NULL) {
-        pcb->tos = 0xC0; // Forcage du marquage TOS Voix au niveau IP
-        udp_unicast_tx_start(pcb);
+    	pcb->tos = 0xC0;
+        udp_broadcast_tx_start(pcb);
     }
 }
+
 \end{lstlisting}
 
 \section{Système de transmission alternatif DVB-T2 (SDR / BladeRF)}

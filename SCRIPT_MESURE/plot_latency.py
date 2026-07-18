@@ -1,16 +1,23 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 # --- Configuration ---
-CSV_FILE = 'mesures.csv'
+# Détermine le chemin absolu du dossier contenant ce script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construit les chemins absolus pour le CSV et l'image de sortie
+CSV_FILE = os.path.join(script_dir, 'mesures.csv')
+OUTPUT_IMG = os.path.join(script_dir, 'latency_plot.png')
+
 OBJECTIF_MS = 80  # Le seuil max défini dans ton cahier des charges
 
 # --- Chargement des données ---
 try:
     df = pd.read_csv(CSV_FILE)
 except FileNotFoundError:
-    print(f"Erreur : Le fichier {CSV_FILE} n'a pas été trouvé.")
+    print(f"Erreur : Le fichier n'a pas été trouvé au chemin :\n{CSV_FILE}")
     exit()
 
 latences = df['latence_ms'].values
@@ -62,6 +69,6 @@ plt.annotate(f'Max: {pic_haut} ms', xy=(np.argmax(latences)+1, pic_haut),
 
 # --- Sauvegarde ---
 plt.tight_layout()
-plt.savefig('latency_plot.png', dpi=300)
-print("\nGraphique généré avec succès sous 'latency_plot.png'")
+plt.savefig(OUTPUT_IMG, dpi=300)
+print(f"\nGraphique généré avec succès sous :\n{OUTPUT_IMG}")
 plt.show()

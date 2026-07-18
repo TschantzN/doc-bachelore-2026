@@ -125,4 +125,5 @@ sudo taskset -c 3 nice -n -20 ./gateway_spi
 \end{lstlisting}
 
 Cette approche se rapprochant d'un fonctionnement \textit{Bare-Metal} garantit que le cœur 3 est dédié à 100 \% 
-au parsing des images et aux transactions SPI matérielles. Cela a permis lorsque l'OS redistribuait les processus en tâche de fond.
+au parsing des images et aux transactions SPI matérielles. Cela a permis d'éviter à l'OS de préempter notre processus 
+en tâche de fond.

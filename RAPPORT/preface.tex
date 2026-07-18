@@ -1,57 +1,121 @@
-\section{Terminologie et concepts de base}
+\section{Terminologie et concepts clés}
 \addcontentsline{toc}{section}{Terminologie et concepts clés}
 
-Afin de faciliter la lecture de ce document et la compréhension des enjeux techniques liés à la transmission 
-vidéo basse latence, les concepts et acronymes suivants seront couramment utilisés :
+Afin de faciliter la lecture de ce document et la compréhension des choix architecturaux liés à la transmission 
+vidéo basse latence, les acronymes et concepts techniques suivants seront couramment utilisés :
 
 \begin{description}
-    \item[Wi-Fi HaLow (IEEE 802.11ah) :] Amendement du standard Wi-Fi conçu pour opérer dans les bandes de 
-    fréquences inférieures à 1 GHz (Sub-1 GHz). Contrairement au Wi-Fi classique (2.4 GHz ou 5.8 GHz), il 
-    privilégie la portée (jusqu'à plusieurs kilomètres) et la capacité à traverser les obstacles physiques, 
-    au détriment de la bande passante maximale.
+    \item[Compression Inter-frame :] Méthode de compression vidéo temporelle (utilisée par le H.264 et le H.265) 
+    qui encode les différences entre plusieurs images consécutives. Bien qu'extrêmement économe en bande passante, 
+    elle exige la mise en mémoire tampon et l'analyse de dépendances temporelles de plusieurs trames au décodage, 
+    introduisant une latence logicielle structurelle incompatible avec le FPV.
     
-    \item[FPV (\textit{First Person View}) :] "Vol en immersion". Technique de pilotage où la caméra embarquée 
-    sur le drone transmet un flux vidéo en temps réel vers les lunettes ou l'écran du pilote, exigeant une 
-    latence extrêmement faible et constante.
+    \item[Compression Intra-frame :] Méthode de compression vidéo exclusivement spatiale (utilisée par le MJPEG) 
+    où chaque image est compressée de manière totalement autonome, à la manière d'une photographie JPEG isolée. 
+    Elle élimine instantanément le besoin de mise en mémoire tampon temporelle au décodage, permettant d'afficher 
+    l'image dès sa réception sur le réseau au prix d'un flux de données plus lourd.
+
+    \item[Couche MAC :] (\textit{Media Access Control}) Sous-couche du modèle réseau OSI chargée de contrôler 
+    l'accès physique au support de transmission (l'air, dans notre cas), de réguler le partage du canal et de 
+    gérer les acquittements matériels.
+    
+    \item[Couche PHY :] Niveau physique fondamental du modèle OSI. Elle gère la transformation des bits 
+    applicatifs en signaux électriques ou en ondes radiofréquences, dictant la modulation et la largeur 
+    de bande du canal.
+    
+    \item[DWT :] (\textit{Data Watchpoint and Trace}) Composant matériel intégré aux processeurs ARM Cortex-M 
+    permettant, entre autres, de compter les cycles d'horloge du cœur pour un profilage temporel avec une précision 
+    absolue de l'ordre de la nanoseconde.
+    
+    \item[EKH05 / EKH19 :] Cartes d'évaluation (\textit{Evaluation Kits}) développées par Morse Micro intégrant 
+    les puces Wi-Fi HaLow MM8108. L'EKH05 dispose d'entrées/sorties matérielles étendues (bus SPI, GPIO) pour 
+    l'IoT, tandis que l'EKH19 est conçue pour un interfaçage réseau standard (USB ou routeur OpenWrt).
+    
+    \item[FPV (\textit{First Person View}) :] « Vol en immersion ». Technique de pilotage où la caméra embarquée 
+    sur le drone transmet un flux vidéo en temps réel vers les lunettes ou l'écran du pilote, exigeant une latence 
+    extrêmement faible et constante.
+    
+    \item[FreeRTOS / RTOS :] (\textit{Real-Time Operating System}) Système d'exploitation temps réel open-source 
+    pour microcontrôleurs. Contrairement à un OS classique (comme Linux), un RTOS garantit l'exécution des tâches 
+    dans des délais stricts et déterministes, minimisant ainsi la gigue logicielle lors du routage des données.
+    
+    \item[Gigue (\textit{Jitter}) :] Variation temporelle de la latence. Dans un flux vidéo en temps réel, une 
+    forte gigue (des paquets arrivant en rafales irrégulières) provoque des saccades visuelles souvent plus 
+    perturbantes pour le pilotage qu'une latence fixe et stable.
+    
+    \item[GPIO :] (\textit{General Purpose Input/Output}) Broche physique d'un microcontrôleur pouvant être 
+    configurée par logiciel comme entrée ou sortie numérique (utilisée dans ce projet pour le signal de 
+    \textit{Handshake}).
+    
+    \item[GStreamer :] Framework multimédia open-source reposant sur une architecture de graphes (pipelines). Il 
+    permet de chaîner des éléments logiciels pour capturer, encoder, transmettre et décoder de la vidéo avec une 
+    latence minimale.
+    
+    \item[Jetson Nano :] Nano-ordinateur développé par Nvidia, équipé d'un processeur ARM et d'un processeur 
+    graphique (GPU) intégré, utilisé lors des premières phases d'expérimentation du projet.
+    
+    \item[Latence « Glass-to-Glass » :] Délai total mesuré entre l'instant où un événement physique se produit 
+    devant l'objectif de la caméra (le premier « verre ») et le moment où il est affiché sur l'écran du pilote 
+    (le second « verre »). C'est la métrique de performance absolue de ce projet.
+    
+    \item[LDPC :] (\textit{Low-Density Parity-Check}) Algorithme avancé de correction d'erreurs 
+    (\textit{Forward Error Correction} - FEC). Il utilise des matrices de parité complexes permettant au 
+    récepteur de reconstruire des paquets radio corrompus par de mauvaises conditions RF, évitant ainsi 
+    d'avoir à les retransmettre.
+    
+    \item[LwIP :] (\textit{Lightweight IP}) Pile réseau TCP/IP open-source, hautement optimisée pour les 
+    microcontrôleurs disposant de ressources mémoire (RAM) limitées.
+    
+    \item[MCS :] (\textit{Modulation and Coding Scheme}) Indice définissant le débit physique de la transmission 
+    radio. Un MCS bas (ex: MCS 1) offre un débit réduit mais garantit une robustesse et une sensibilité maximales 
+    face au bruit et aux interférences.
+    
+    \item[MM8108 :] Puce SoC (\textit{System on a Chip}) développée par Morse Micro. C'est le composant 
+    électronique au cœur de ce projet, chargé de la modulation et de l'émission des ondes Wi-Fi HaLow.
     
     \item[NLOS (\textit{Non-Line-Of-Sight}) :] Situation de communication radio où l'émetteur et le récepteur 
-    ne sont pas en ligne de vue directe (présence de bâtiments, de végétation ou de relief). C'est dans ces 
-    conditions que les hautes fréquences perdent leur efficacité.
+    ne sont pas en ligne de vue directe (présence de bâtiments, de dalles en béton ou de relief).
     
-    \item[MCS (\textit{Modulation and Coding Scheme}) :] Indice (généralement de 0 à 10) définissant le débit 
-    physique de la transmission. Il combine un type de modulation radio (ex: BPSK, QAM) et un taux de codage. 
-    Un MCS bas (ex: 1 ou 2) offre un débit réduit, mais garantit une robustesse maximale face au bruit 
-    et aux interférences.
+    \item[OpenHD :] Système d'exploitation open-source basé sur Linux, conçu par la communauté FPV pour 
+    transmettre de la vidéo numérique longue portée en détournant des puces Wi-Fi standards (2.4 et 5.8 GHz).
     
-    \item[LDPC (\textit{Low-Density Parity-Check}) :] Algorithme avancé de correction d'erreurs (FEC). Contrairement 
-    au codage convolutif standard (BCC), le LDPC utilise des matrices de parité complexes permettant au récepteur de 
-    reconstruire des paquets de données corrompus par de mauvaises conditions radio, évitant ainsi de devoir redemander 
-    l'envoi du paquet (ce qui détruirait la latence vidéo).
+    \item[OpenOCD :] (\textit{Open On-Chip Debugger}) Logiciel libre agissant comme un serveur de débogage. 
+    Il permet de programmer et d'inspecter la mémoire d'un microcontrôleur depuis un PC via une interface matérielle.
     
-    \item[Couches PHY et MAC :] Niveaux fondamentaux du modèle OSI. La \textbf{couche PHY} (Physique) gère la transformation 
-    des bits en ondes radio. La \textbf{couche MAC} (\textit{Media Access Control}) gère les règles d'accès à l'antenne et 
-    les retransmissions. Ce projet modifie directement ces couches pour les adapter au flux vidéo.
+    \item[OpenWrt :] Distribution Linux open-source extrêmement légère, conçue pour remplacer les microprogrammes 
+    (\textit{firmwares}) des routeurs réseau, offrant un contrôle bas niveau sur les interfaces de routage.
     
-    \item[RTOS (\textit{Real-Time Operating System}) :] Système d'exploitation temps réel (comme FreeRTOS, utilisé sur 
-    le microcontrôleur d'émission STM32). Contrairement à un OS classique (comme Linux), un RTOS garantit l'exécution des tâches dans 
-    des délais stricts et déterministes, minimisant ainsi la gigue logicielle lors du routage des données.
-
-    \item[Latence "Glass-to-Glass" :] Délai total mesuré entre l'instant où un événement physique se produit devant l'objectif 
-    de la caméra (le premier "verre") et le moment où il est affiché sur l'écran du pilote (le second "verre"). C'est la métrique 
-    de performance absolue de ce projet, englobant tous les temps de traitement matériels et logiciels.
-
-    \item[UDP Broadcast \& No-ACK :] Stratégie de transmission réseau consistant à diffuser des paquets de données à l'aveugle à tous 
-    les équipements du sous-réseau, sans demander d'accusé de réception (\textit{No-ACK}). Cette méthode sacrifie la garantie absolue de 
-    livraison au profit d'un flux continu à latence minimale.
-
-    \item[Gigue (\textit{Jitter}) :] Variation temporelle de la latence. Dans un flux vidéo en temps réel, une forte gigue (des paquets arrivant 
-    en rafales irrégulières) provoque des saccades visuelles souvent plus perturbantes pour le pilotage qu'une latence fixe et stable.
-
-    \item[Provisionnement (\textit{Provisioning}) :] Processus technique consistant à injecter des données de configuration vitales, des fichiers 
-    de calibration matérielle (binaire de microcode BCF) et des profils réglementaires régionaux (\textit{Country Code}) dans une zone mémoire non 
-    volatile dédiée (le \textit{Config Store} du STM32). Cette opération, distincte du flashage du firmware applicatif en C, est indispensable 
-    pour permettre le démarrage d'une puce radio dépourvue de mémoire morte interne (comme le SoC Morse Micro MM8108), en lui fournissant sa feuille de 
-    route matérielle dès sa mise sous tension.
+    \item[Provisionnement (\textit{Provisioning}) :] Processus technique consistant à injecter des données de 
+    configuration vitales, des fichiers de calibration matérielle (binaire de microcode BCF) et des profils 
+    réglementaires régionaux dans une zone mémoire non volatile dédiée (le \textit{Config Store} du STM32), 
+    indispensable au démarrage de la puce radio MM8108.
+    
+    \item[Raspberry Pi :] Gamme de nano-ordinateurs monocartes fonctionnant sous Linux, retenue comme plateforme 
+    finale d'acquisition vidéo grâce à l'efficacité de son outil natif \texttt{rpicam-vid}.
+    
+    \item[SPI :] (\textit{Serial Peripheral Interface}) Bus de communication matériel synchrone fonctionnant en 
+    mode Maître/Esclave. Utilisé ici à une fréquence de 8 MHz pour le transfert à haute vitesse du flux vidéo 
+    compressé entre la Raspberry Pi et le microcontrôleur.
+    
+    \item[ST-LINK :] Sonde de débogage matérielle développée par STMicroelectronics, permettant à un ordinateur 
+    de flasher du code et de contrôler un microcontrôleur STM32.
+    
+    \item[STM32 :] Famille de microcontrôleurs 32 bits basés sur l'architecture ARM Cortex-M, développée par 
+    STMicroelectronics.
+    
+    \item[STM32CubeIDE :] Environnement de développement intégré (IDE) officiel de STMicroelectronics, basé sur 
+    Eclipse, utilisé pour écrire, compiler et déboguer le code C du projet embarqué.
+    
+    \item[Tcpdump :] Outil d'analyse réseau en ligne de commande permettant de capturer et d'inspecter les 
+    paquets de données (trames) transitant sur une interface réseau matérielle.
+    
+    \item[UDP Unicast \& No-ACK :] Stratégie de transmission réseau consistant à envoyer des paquets de données 
+    ciblés vers une unique adresse de destination, tout en modifiant les couches basses pour supprimer les 
+    mécanismes d'acquittement logiciel afin de privilégier un flux continu à latence minimale.
+    
+    \item[Wi-Fi HaLow (IEEE 802.11ah) :] Amendement du standard Wi-Fi conçu pour opérer dans les bandes de 
+    fréquences Sub-1 GHz. Contrairement au Wi-Fi classique, il privilégie la portée et la capacité à traverser 
+    les obstacles physiques au détriment de la bande passante maximale.
 \end{description}
 
-\vspace{1cm}
+\vspace{0.5cm}

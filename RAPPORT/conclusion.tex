@@ -4,7 +4,7 @@ toujours à l'incapacité des fréquences standards (2.4 GHz et 5.8 GHz) à pén
 obstacles physiques. Ce travail de Bachelor visait à évaluer une solution de rupture en détournant 
 la norme IEEE 802.11ah (Wi-Fi HaLow) pour y faire transiter un flux vidéo en temps réel sur la bande Sub-1 GHz. 
 Au terme de ce projet, l'architecture globale du système a été établie et optimisée jusqu'à ses limites 
-physiques et logicielles pour répondre aux exigences de réactivité du vol en immersion.
+physiques et logicielles pour répondre aux exigences de réactivité du vol en immersion.\newline
 
 Le succès de ce travail repose sur un changement de paradigme logiciel dicté par la réalité des mesures. 
 L'approche initiale en H.264, bien que très économe en bande passante, s'est heurtée à une latence plancher 
@@ -13,9 +13,9 @@ le système a été entièrement refondu autour d'un codec exclusivement intra-t
 été rendue possible par l'élargissement de la bande passante radio (8 MHz, MCS 1) et le développement d'un 
 programme d'émission en C sur la Raspberry Pi assurant le découpage à la volée des images en paquets de 1400 octets. 
 L'utilisation de l'UDP Unicast couplée à un forçage agressif des paramètres d'accès au canal (QoS MAC) sur le 
-STM32 a finalement permis de supprimer tout délai de rétention réseau.
+STM32 a finalement permis de supprimer tout délai de rétention réseau.\newline
 
-Ce travail de bachelor a permis d'obtenir des performances excellente. Les mesures physiques 
+Ce travail de bachelor a permis d'obtenir d'excellente performances. Les mesures physiques 
 ont prouvé que le transport matériel pur (transfert SPI, traitement MCU, et temps de vol RF) s'effectue en 
 seulement \textbf{12.5 millisecondes}. Mesurée sur un affichage à 165 Hz, la latence visuelle globale 
 (\textit{Glass-to-Glass}) s'établit entre \textbf{40 et 50 ms en moyenne}, avec des pointes récurrentes à 
