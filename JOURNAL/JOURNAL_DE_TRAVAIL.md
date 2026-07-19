@@ -469,9 +469,151 @@ gantt
 ```
 
 ### Vendredi 12.06
+- Nettoyage du pipeline TX : suppression complète du serveur HTTP intermédiaire en Rust.
+- Développement de la version directe `gateway_spi_noserv.c` pour coupler l'outil de capture natif et le bus SPI via un pipe anonyme non-bloquant.
+- Configuration et gel des fréquences CPU (2.0 GHz) et de la régulation thermique de la Raspberry Pi 4B (Force Turbo).
+- Isolation matérielle complète du cœur CPU numéro 3 du planificateur Linux via la directive `isolcpus=3`.
 
+### Lundi 15.06
+- Analyse et évaluation comparative de la solution logicielle multi-threadée *uStreamer*.
+- Abandon de la piste *uStreamer* en raison d'un manque de gain de performance par rapport à notre passerelle en C directe.
+- Validation expérimentale de la configuration système : latence *Glass-to-Glass* stable à 70-80 ms sur l'écran du PC de diagnostic.
 
-## Juillet
+### Mardi 16.06
+- Flashage d'une image Linux avec noyau Temps Réel durci (*Real-Time PREEMPT*).
+- Montage de la partition système ext4 sous VM Linux pour configurer l'accès SSH et injecter les clés de sécurité.
+- Analyse comparative des performances : l'OS Temps Réel durci offre des gains similaires à notre isolation manuelle par affinité de cœur (`taskset -c 3`).
+- Validation sur moniteur haute fréquence (165 Hz) : réduction de la latence visuelle moyenne à 40-50 ms grâce à la suppression du goulot d'affichage.
+
+### Vendredi 19.06
+- Configuration d'une liaison réseau Ethernet filaire directe (PC à RPi) sans lien radio Sub-1 GHz pour isoler l'overhead logiciel.
+- Mesure d'une latence résiduelle locale de 100 ms en H.264, validant techniquement le pivot d'architecture global vers le MJPEG.
+- Montage de la carte radio SDR *BladeRF xA9* sur la Raspberry Pi 4B en vue des tests comparatifs DVB-T2.
+
+### Dimanche 21.06
+- Optimisation fine du pilote radio : désactivation complète de l'agrégation de paquets MAC (*A-MPDU*) afin de supprimer la gigue temporelle d'accumulation.
+- Résolution des problèmes de démodulation de la BladeRF : configuration des scripts de commandeRF interactifs.
+
+### Lundi 22.06
+- Établissement du pipeline complet DVB-T2 : GStreamer -> MPEG-TS -> FIFO -> `bladeRF-cli`.
+- Configuration de la station de réception TSDuck sous Windows pour le décodage matériel via Direct3D 11.
+- Métrologie comparative : validation d'un retard de 2 à 7 secondes inhérent au standard MPEG-TS, justifiant définitivement le choix du Wi-Fi HaLow.
+
+### Mardi 23.06
+- Fusion et fiabilisation du code source de la gateway de production (`gateway_spi_noserv.c`).
+- Implémentation du padding de sécurité par zéros et du double acquittement de Handshake pour éliminer le flicker et les crashs de GStreamer.
+- Nettoyage du code d'intégration du STM32U5 et durcissement des paramètres d'accès au canal.
+
+### Vendredi 26.06
+- Intégration de la plateforme alternative *Debix Model A* et configuration de son bus SPI secondaire.
+- Écriture du script d'automatisation système `init.sh` pour forcer le mode d'exposition rapide de la caméra et le polling de la bibliothèque `libgpiod`.
+
+### Mardi 30.06
+- Mesures de performance sur l'architecture Debix : obtention d'une latence de 150 ms.
+- Identification du goulot d'étranglement : l'absence d'accélération matérielle MJPEG native sur l'i.MX8 délègue tout le calcul au CPU.
+- Décision de conserver la Raspberry Pi 4B comme plateforme d'émission nominale pour le prototype final.
+
+### Jeudi 02.07
+- Recherches approfondies dans les manuels de référence NXP pour valider l'absence de codec matériel MJPEG sur les puces i.MX8 Mini/Plus.
+- Analyse comparative des pipelines H.264 matériels NXP.
+
+### Vendredi 03.07
+- Étude fonctionnelle de l'API de puissance de Morse Micro : identification de la fonction `mmwlan_override_max_tx_power()`.
+- Intégration de la fonction dans l'initialisation du firmware STM32.
+- Constat de bridage matériel : la puissance de l'émetteur reste bloquée à 14 dBm au lieu des 26 dBm théoriques.
+
+### Vendredi 06.07
+- Rédaction et publication d'un ticket technique détaillé sur la plateforme communautaire de Morse Micro pour comprendre le bridage à 14 dBm.
+- Structuration des chapitres de réalisation du rapport de Bachelor (reprise du rapport intermédiaire).
+
+### Mardi 07.07
+- Rédaction du corps du rapport (sections "Capture vidéo" et "Interfaçage matériel SPI").
+
+### Vendredi 10.07
+- Campagne de métrologie RF à l'analyseur de spectre : validation d'une émission AP (EKH19) conforme à 20 dBm en ping flood.
+- Validation définitive de la taille des paquets applicatifs réseau (1400 octets stables) via capture globale `tcpdump`.
+- Enregistrement d'un profil vidéo MJPEG dynamique d'une minute à 60 Hz pour établir le profilage mathématique exact du système (charge utile moyenne de 3204 octets par image, soit un débit applicatif réel de 1.53 Mbps réparti sur 3 paquets UDP).
+
+### Samedi 11.07
+- Intégration des données statistiques de la Debix et restructuration des schémas d'architecture du document de synthèse.
+- Déplacement des sections de fragmentation vers les chapitres de bas niveau pour améliorer la cohérence de l'approche *Bottom-Up*.
+
+### Dimanche 12.07
+- Envoi des journaux de logs d'OpenWrt et des dumps complets de la configuration `config.hjson` aux équipes de support de Morse Micro.
+
+### Lundi 13.07
+- Validation de la fonction d'atténuation de puissance : le micrologiciel répond correctement aux consignes inférieures à 14 dBm.
+- Session de prises de vues en extérieur (IICT) pour documenter la qualité visuelle réelle du flux FPV.
+
+### Mardi - Jeudi 14.07 - 16.07
+- Analyse statistique finale des 79 échantillons collectés par vidéométrologie visuelle à 240 FPS / 165 Hz.
+- Calcul rigoureux de l'écart-type : validation d'une gigue $\sigma$ stable de 6.4 ms pour une latence moyenne absolue de 40.1 ms.
+- Relecture globale, corrections typographiques, génération des tables des matières, compilation des index et finalisation de la mise en page LaTeX du rapport et des annexes séparées.
 
 ### Jeudi 23.07 avant 11h00
-**Rendu final du rapport**
+- **Rendu final du rapport de Bachelor et de ses annexes matérielles.**
+
+---
+
+## Version finale du diagramme de Gantt (23.07)
+
+```mermaid
+gantt
+    title Planning 450h - Bilan Final Réel (Rendu le 23/07)
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d/%m
+
+    excludes 2026-03-09,2026-03-10,2026-03-11,2026-03-12,2026-03-13,2026-04-06,2026-04-07,2026-04-08,2026-04-09,2026-04-10
+    
+    section Indisponible
+    Crunch      :2026-03-09, 2026-03-14
+    Vacances    :2026-04-06, 2026-04-11
+
+    section Initialisation & Faisabilité
+    Faisabilité Driver :done, p1, 2026-02-16, 2026-02-28
+    Setup SDK MM       :done, p2, 2026-03-01, 2026-03-06
+    Recherche param SDK & Test flash EKH05 :done, p3, 2026-03-06, 2026-03-20
+    Test flash ekh05         :done,milestone ,2026-03-18, 0d
+
+    section TX (FreeRTOS)
+    Architecture UDP Broadcast :done, tx1, 2026-03-20, 2026-03-24
+    Packet de test & Burst LwIP :done, tx2, 2026-03-20, 2026-03-24
+    Forçage PHY (MCS 2, 2MHz) :done, tx3, 2026-03-20, 2026-03-24
+    Interface Encodeur Vidéo (Jetson) :done, tx4, 2026-03-25, 2026-03-29
+    Contrôle de flux matériel (Handshake GPIO) :done, tx4b, 2026-03-28, 2026-03-29
+    Opti gstreamer, jitter et range, sur jetson :done, tx5, 2026-03-29, 2026-05-10
+    Migration Pipeline Vidéo (H.264 -> MJPEG) :done, tx6, 2026-05-10, 2026-05-20
+    Optimisation QoS WMM, EDCA & Unicast (STM32) :done, tx7, 2026-05-16, 2026-06-05
+    Suppression Bufferbloat & Stream Pipe Pur :done, tx8, 2026-06-05, 2026-06-14
+    Évaluation Plateforme alternative Debix :done, tx9, 2026-06-26, 2026-07-03
+
+    section RX (OpenWrt & PC & RPI4)
+    Désactivation Chiffrement & Monitor Mode :done, rx1, 2026-03-01, 2026-03-06
+    Désactivation Chiffrement (Mode AP ouvert) :done, rx2, 2026-03-20, 2026-03-24
+    Tunnel Réseau (tcpdump, Netcat, TCP) :done, rx3, 2026-03-20, 2026-03-24
+    Scripting d'analyse (Python/Wireshark) :done, rx4, 2026-03-24, 2026-03-30
+    Pontage Réseau (Bridge transparent LAN) :done, rx4b, 2026-03-26, 2026-03-28
+    Implémentation Pipeline Vidéo (PC) :done, rx5, 2026-03-27, 2026-03-29
+    Validation MVP (Latence ~200ms) :done,milestone, 2026-03-29, 0d
+    Optimisation Latence & GStreamer :done, rx6, 2026-03-30, 2026-05-15
+    Intégration Parseur JPEG & Reconstruction UDP :done, rx7, 2026-05-15, 2026-06-05
+    Lock Latence Cible FPV (70-100ms) :done,milestone, 2026-06-05, 0d
+    Ajustement Réception Moniteur Diagnostic 165Hz :done, rx8, 2026-06-05, 2026-06-16
+    Mesures comparatives DVB-T2 / SDR BladeRF :done, rx9, 2026-06-19, 2026-06-26
+
+    section Post-Semestre (40h/sem)
+    Tests Terrain & Range LOS/NLOS :done, val1, 2026-07-03, 2026-07-13
+    Profilage mathématique des trames MJPEG :done, val2, 2026-07-10, 2026-07-12
+    Analyse Statistique Finale (79 mesures) :done, val3, 2026-07-14, 2026-07-16
+    Lock Latence Finale (~40ms) :done, milestone, 2026-07-16, 0d
+
+    section Documentation
+    Rédaction du CDC :done, doc1, 2026-02-16, 2026-03-09
+    CDC validé :done, milestone ,2026-03-09, 0d
+    correction détail CDC :done, doc2, 2026-03-24, 1d
+    Rapport - Intro & Faisabilité :done, doc3, 2026-02-27, 2026-03-21
+    Rapport - Architecture Système :done, doc4, 2026-03-29, 2026-05-10
+    Rendu intermédiaire :done, milestone ,2026-05-20, 0d
+    Rapport - Réalisation, Métrologie & Code :done, doc5, 2026-05-11, 2026-07-16
+    Finalisation & Mise en page :done, doc6, 2026-07-11, 2026-07-22
+    Rendu final du rapport de Bachelor :done, milestone ,2026-07-23, 0d
