@@ -80,7 +80,7 @@ utile de nos paquets (MTU applicative fixée à 1400 octets, donc légérement i
 \newpage
 
 \subsection{Pipelines d'émission MJPEG final (TX)}
-\begin{figure}[htbp]
+\begin{figure}[!htb]
     \centering
     \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb2.png}
     \caption{(2) Capture vidéo}
@@ -108,8 +108,11 @@ Les arguments passés à la ligne de commande visent à supprimer tout traitemen
     \item \textbf{\texttt{--quality 8} :} Règle la table de quantification JPEG sur une compression forte. Ce paramètre clé maintient le flux utile moyen autour de 1.5 Mbps, lui permettant de traverser le canal radio de 8 MHz sans saturation.
 \end{itemize}
 
+\newpage
+
 \subsection{Pipeline de réception MJPEG final (RX)}
-\begin{figure}[htbp]
+
+\begin{figure}[!htbp]
     \centering
     \includegraphics[width=1\textwidth]{imgs/complet_schematic_nb3.png}
     \caption{(3) Plateformes de traitement.}

@@ -4936,9 +4936,6 @@ combiner glossaire et terminologie et concept de base...
 [x] Introduction
 
 [ ] étude de faisabilité - Idem rendu intermédiaire
-- mentionné que le MCS peut enfaite etre forcé coté TX ? et que c'est comme ca que ca a été fait au final. mais en meme temps c'est 
-- ou on trouve les fichier (rc.c etc) parce que la c'est vrai que c est un peut flou?
-- surtout que ou final les modif du driver n aurons pas été très utile en vrai. apars pour la compréhension
 
 [ ] Architecture globale du système
 - enlever le gpu utiliser ?
@@ -4967,15 +4964,3 @@ combiner glossaire et terminologie et concept de base...
 - update les IP, meme si en vrai s'est égale.
 
 
-Mettre les codes sur le git. 
-- firmware directement sur le fork du SDK,  le hash de commit du main et dire dans quel dossier s'est (et que le hsjon y est aussi).
-https://github.com/TschantzN/mm-iot-sdk/commit/96f42189e84f7d0a7c83049b105b1673fedea591
-
-- pour la rpi je peux mettre le .c sur le git quand meme... cependant c'est déjà dans les annexes
-
-2. Proposition de rédaction pour ton chapitre "Architecture" ou "Choix du matériel"
-Pour intégrer ces sources et solidifier ton argumentation face aux examinateurs, voici comment tu peux formuler cette décision technique de manière très professionnelle dans le corps du rapport :
-
-« L'évaluation de la plateforme Debix Model A \cite{DebixSBCManual} s'est heurtée à une contrainte structurelle majeure concernant l'encodage vidéo. La documentation officielle de NXP \cite{DebixIMXLinuxGuide} indique que l'accélération matérielle native (VPU) pour l'encodage MJPEG n'est pas supportée sur les puces i.MX 8M Plus équipant notre révision, contrairement aux anciennes générations i.MX 6.
-
-Par conséquent, l'encodage MJPEG doit obligatoirement être délégué au processeur principal (CPU) dans les deux cas. La mise en place d'un pipeline d'acquisition exploitant l'accélération NXP s'avère nettement plus complexe et requiert un grand nombre d'étapes logicielles intermédiaires \cite{DebixCameraManual, DebixIMXLinuxGuide} par rapport à l'environnement unifié et optimisé de \texttt{rpicam-vid} sur Raspberry Pi \cite{RpiSetup}. Face au planning du projet et dans le but de maximiser le temps alloué aux mesures de portée (tests de range en conditions NLOS) ainsi qu'à la validation globale de la latence, le choix pragmatique s'est porté sur la conservation de la solution Raspberry Pi. L'optimisation fine du pipeline sur architecture Debix constitue ainsi une perspective d'itération future prometteuse. »
