@@ -1,104 +1,179 @@
-\appendix
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\graphicspath{ {./imgs/} }
+\usepackage{fancyhdr} 
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{hyperref} 
+\usepackage{longtable}
+\usepackage{array}  
+\setlength{\parindent}{0pt}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{gray!10},
+    frame=single,
+    breaklines=true,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{orange}
+}
+
+\geometry{
+    top=4cm, 
+    bottom=2.5cm, 
+    left=2.5cm, 
+    right=2.5cm,
+    headheight=3cm, 
+    headsep=0.5cm,
+}
+
+% Define the custom headers
+\fancypagestyle{firstpage}{% First page header style
+    \fancyhf{} 
+    \fancyhead[L]{%
+        \includegraphics[height=1.5cm]{imgs/logos/heig-vd-baseline.pdf} \\
+    }
+    \fancyhead[R]{%
+        \includegraphics[height=1.5cm]{imgs/logos/hes-so.pdf} \\
+    }
+    \fancyfoot{} 
+}
+
+% Define other pages style
+\fancypagestyle{otherpages}{%
+    \fancyhf{}
+    \fancyhead[L]{%
+        \includegraphics[height=1.5cm]{imgs/logos/heig-vd.pdf} \\
+    }
+    \fancyfoot[C]{\small page \thepage}
+}
+
+\begin{document}
+\emergencystretch=1em 
+
+% First page content
+\thispagestyle{firstpage}
+\vspace*{2cm}
+\begin{center}
+    \Huge Annexes\\
+    \vspace{0.6cm}
+    \Huge Transmission vidéo basse latence pour drone FPV\\
+    \vspace{0.2cm}
+    \Large Travail de Bachelor\\
+    \vspace{0.2cm}
+    \small Non Confidentiel\\
+    \vspace{0.5cm}
+    Départements : TIC\\
+    \vspace{0.5cm}
+    Filière : Informatique et systèmes de communication\\
+    \vspace{0.5cm}
+    Orientation : Systèmes informatiques embarqués\\
+\end{center}
+
+\vspace{9cm}
+
+\renewcommand{\arraystretch}{1.5} 
+
+\begin{flushleft} 
+    \begin{tabular}{@{}l l@{}}
+        \textbf{Auteur :}      & \textbf{Tschantz Nathan} \\
+        \textbf{Supervisé par :}   & \textbf{Favrat Pierre \& Mahboob Karimian} \\
+        \textbf{Date :}         & \textbf{\today} \\
+    \end{tabular}
+\end{flushleft}
+
+\pagestyle{otherpages}
+
+\newpage
+\thispagestyle{empty}
+\mbox{}
+\newpage
+
+\tableofcontents 
+\newpage
+\listoftables     
+
+\newpage
 
 \section{Guide de connexion et d'accès aux équipements}
 \label{annexe:connexion}
 
-Durant la phase de développement, le système étant distribué sur plusieurs plateformes matérielles dépourvues d'écran 
-(architecture \textit{headless}), des méthodes de connexion spécifiques ont été mises en place pour interagir avec chaque équipement.
+Durant la phase de développement, le système étant distribué sur plusieurs plateformes matérielles dépourvues d'écran (architecture \textit{headless}), des méthodes de connexion spécifiques ont été mises en place pour interagir avec chaque équipement.
 
 \subsection{Accès au microcontrôleur d'émission (STM32 / EKH05)}
-Le module Morse Micro EKH05 intègre un débogueur ST-LINK natif. La connexion physique s'effectue via un simple câble micro-USB relié 
-à la station de développement (PC Windows). 
+Le module Morse Micro EKH05 intègre un débogueur ST-LINK natif. La connexion physique s'effectue via un simple câble micro-USB relié à la station de développement (PC Windows). 
 Cette liaison fournit deux interfaces virtuelles simultanées :
 \begin{itemize}
     \item \textbf{Le flashage et débogage (SWD) :} Géré de manière transparente par STM32CubeIDE via le serveur OpenOCD.
-    \item \textbf{La console de logs (UART) :} Accessible via un émulateur de terminal série (tel que PuTTY). Les paramètres 
-    de connexion au port COM virtuel sont systématiquement : \texttt{Baudrate 115200, 8 bits de données, 1 bit d'arrêt, aucune parité}.
+    \item \textbf{La console de logs (UART) :} Accessible via un émulateur de terminal série (tel que PuTTY). Les paramètres de connexion au port COM virtuel sont systématiquement : \texttt{Baudrate 115200, 8 bits de données, 1 bit d'arrêt, aucune parité}.
 \end{itemize}
-Du point de vue du réseau HaLow, le STM32 possède l'adresse IP source \texttt{192.168.12.2}.
+Du point de vue du réseau HaLow, le STM32 possède l'adresse IP source statique \texttt{192.168.12.2}.
 
 \subsection{Accès à l'ordinateur d'acquisition (Raspberry Pi 4B)}
-Pour modifier les scripts de capture vidéo et lancer la gateway sans alourdir le processeur avec une interface 
-graphique, la carte d'acquisition a été configurée pour un accès distant via SSH (\textit{Secure Shell}).
-
-La connexion s'effectue depuis le PC de développement. En cas de déploiement en extérieur (sans réseau local), l'interface Ethernet de la carte est configurée avec une adresse IP statique de repli pour la prise en main rapide.
+Pour modifier les scripts de capture vidéo et lancer la gateway sans alourdir le processeur avec une interface graphique, la carte d'acquisition a été configurée pour un accès distant via SSH (\textit{Secure Shell}). La connexion s'effectue depuis le PC de développement via le port Ethernet filaire local.
 
 \subsection{Accès au routeur relais de réception (GL.iNet MT3000 / OpenWrt)}
-Le routeur OpenWrt faisant office de pont réseau (Bridge) est le centre névralgique de la réception au sol. Son adresse 
-IP sur l'interface sans-fil est \texttt{192.168.12.1}. Son administration s'effectue exclusivement via son interface 
-Ethernet (LAN), qui a été isolée pour éviter tout conflit de routage.
-
+Le routeur OpenWrt faisant office de pont réseau (Bridge) est le centre névralgique de la réception au sol. Son adresse IP sur l'interface sans-fil est \texttt{192.168.12.1}. Son administration s'effectue exclusivement via son interface Ethernet (LAN), qui a été isolée pour éviter tout conflit de routage.
 \begin{itemize}
-    \item \textbf{Interface Web (LuCI) :} Accessible depuis un navigateur web à l'adresse \texttt{http://192.168.13.1}. 
-    Elle permet de configurer le mode moniteur ou les paramètres de l'AP sans chiffrement.
-    \item \textbf{Accès SSH (Ligne de commande) :} Indispensable pour injecter le module noyau (\texttt{morse.ko}) 
-    et créer le pont logiciel (\texttt{brctl addif br-ahwlan wlan0}). La connexion s'effectue via : \\
-    \texttt{ssh root@192.168.13.1}
+    \item \textbf{Interface Web (LuCI) :} Accessible depuis un navigateur web à l'adresse \texttt{http://192.168.12.1}. Elle permet de configurer le mode moniteur ou les paramètres de l'AP sans chiffrement.
+    \item \textbf{Ligne de commande :} Accessible via l'interface web (Service $\rightarrow$ Terminal) ou en SSH, elle permet d'injecter le module noyau (\texttt{morse.ko}) et de manager le pont logiciel via la commande \texttt{brctl addif br-ahwlan wlan0}.
 \end{itemize}
 
 \subsection{Accès et adressage des stations de réception (RX)}
-Pour éviter les conflits de routage avec le système d'exploitation de la station de réception, le réseau FPV est strictement 
-isolé sur le sous-réseau \texttt{192.168.12.x}, sans passerelle par défaut (aucun accès Internet croisé).
-
+Le réseau FPV est strictement isolé sur le sous-réseau \texttt{192.168.12.x}.
 \begin{description}
-    \item[Station de diagnostic (PC Windows) :] L'interface réseau Ethernet doit être fixée manuellement sur l'adresse 
-    \texttt{192.168.12.10} (Masque : \texttt{255.255.255.0}, Passerelle : \texttt{192.168.12.1}).
-    \item[Station cible (RPi Compute Module / RPi 4B) :] Lors de la réception "Bare-Metal" sous Linux, l'interface Ethernet 
-    nécessite également d'être forcée manuellement sur une adresse statique pour recevoir le flux ponté par le routeur : \\
-    \texttt{IP : 192.168.12.50}
+    \item[Station de diagnostic (PC Windows) :] L'interface réseau Ethernet doit être fixée manuellement sur l'adresse \texttt{192.168.12.10} (Masque : \texttt{255.255.255.0}, Passerelle : \texttt{192.168.12.1}).
+    \item[Station cible (RPi Compute Module / RPi 4B) :] Lors de la réception "Bare-Metal" sous Linux pour les mesures de transit réseau par bouton physique commun, l'interface Ethernet nécessite d'être configurée manuellement sur l'adresse statique suivante : \texttt{192.168.12.50}.
 \end{description}
 
 \subsection{Tableau récapitulatif d'adressage et d'accès}
-
 Le tableau \ref{tab:recap_ip} résume l'ensemble du plan d'adressage et des interfaces de gestion de l'architecture déployée :
 
 \begin{table}[htbp]
     \centering
-    \renewcommand{\arraystretch}{1.4} % Aère les lignes du tableau
+    \renewcommand{\arraystretch}{1.4}
     \begin{tabular}{|p{4.5cm}|p{3.5cm}|p{3cm}|p{4.5cm}|}
         \hline
         \textbf{Équipement / Rôle} & \textbf{Interface d'accès} & \textbf{Adresse IP FPV} & \textbf{Remarques} \\
         \hline
         \hline
-        \textbf{STM32 / EKH05} \newline (Modem Émetteur) & USB (UART / SWD) & \texttt{192.168.12.2} & Reçoit les trames SPI de la Raspberry Pi et les émet en UDP Unicast vers le PC de diagnostic. \\
+        \textbf{STM32 / EKH05} \newline (Modem Émetteur) & USB (UART / SWD) & \texttt{192.168.12.2} & Reçoit les trames SPI de la Raspberry Pi et les émet en UDP Unicast. \\
         \hline
         \textbf{Raspberry Pi 4B} \newline (Acquisition Vidéo TX) & SSH (Ethernet direct) & \textit{Non applicable} & Connecté en SPI au modem. Pas d'IP sur le réseau FPV. \\
         \hline
-        \textbf{GL.iNet MT3000} \newline (Routeur Relais RX) & SSH / Web (LuCI) \newline via LAN & \texttt{192.168.12.1} \newline (Interface \texttt{ahwlan}) & IP d'administration LAN décalée sur \texttt{192.168.13.1} pour éviter les conflits. \\
+        \textbf{GL.iNet MT3000} \newline (Routeur Relais RX) & SSH / Web (LuCI) & \texttt{192.168.12.1} & Interface sans-fil \texttt{ahwlan} pontée. \\
         \hline
-        \textbf{PC Windows} \newline (Station de diag. RX) & Accès local & \texttt{192.168.12.10} & Passerelle fixée sur \texttt{192.168.12.1}. \\
+        \textbf{PC Windows} \newline (Station de diag. RX) & Accès local & \texttt{192.168.12.10} & Station d'affichage et de métrologie finale. \\
         \hline
-        \textbf{RPi Compute Module 4} \newline (Station cible RX) & SSH (Wi-Fi dev) & \texttt{192.168.12.50} & Fixée manuellement sur l'interface Ethernet (\texttt{eth0}). \\
+        \textbf{RPi Compute Module 4} \newline (Station cible RX) & SSH (Wi-Fi dev) & \texttt{192.168.12.50} & Fixée manuellement sur \texttt{eth0}. Dédiée aux tests par bouton. \\
         \hline
     \end{tabular}
     \caption{Récapitulatif des accès et du plan d'adressage (Sous-réseau FPV : 192.168.12.x)}
     \label{tab:recap_ip}
 \end{table}
+\newpage
 
-
-\section{Modifications du pilote Morse Micro}
+\section{Modifications exploratoires du pilote Morse Micro}
 \label{annexe:patch_driver}
-Afin de forcer l'utilisation d'une modulation robuste (MCS 1) et l'activation du code correcteur d'erreurs (LDPC) 
-en dehors de l'interface standard d'OpenWrt, des modifications directes (Patching) ont été opérées sur le code 
-source C du module noyau (Kernel Driver) de la puce MM8108.
-
-Les modifications ont porté sur les fichiers sources lors de la cross-compilation du noyau Linux pour l'architecture 
-MediaTek Filogic :
+Cette section résume les modifications opérées lors de la phase d'investigation bas niveau sur le module noyau Linux.
+Afin de tester le forçage du MCS 1 et l'activation du code correcteur d'erreurs (LDPC) directement au cœur de l'OS du routeur, des modifications ont été testées sur le code source C du pilote noyau 
+(\texttt{morse\_driver}) :
 \begin{itemize}
-    \item \texttt{command.c} : Surcharge de la structure \texttt{morse\_cmd\_req\_set\_transmission\_rate} pour 
-    forcer les bits \texttt{req.use\_ldpc = 1} et injecter le \texttt{mcs\_index}.
-    \item \texttt{usb.c} : Injection de l'appel manuel \texttt{morse\_cmd\_set\_fixed\_transmission\_rate(mors, 1, 1, 0, 0)} 
-    directement dans la séquence d'initialisation \texttt{morse\_usb\_probe} au montage de l'interface pour imposer le MCS 1.
+    \item \texttt{core/command.c} : Surcharge de la structure \texttt{morse\_cmd\_req\_set\_transmission\_rate} pour forcer les bits \texttt{req.use\_ldpc = 1} et injecter le \texttt{mcs\_index}.
+    \item \texttt{core/usb.c} : Injection de l'appel manuel \texttt{morse\_cmd\_set\_fixed\_transmission\_rate(mors, 1, 1, 0, 0)} au sein de la séquence d'initialisation \texttt{morse\_usb\_probe} lors du montage de l'interface.
 \end{itemize}
-L'ensemble de ces modifications a permis de compiler un module \texttt{morse.ko} personnalisé, assurant la stabilité de 
-la liaison nécessaire au transport UDP.
-
-
-\section{Mesure de latence via bouton partagé}
+comme mentionné dans le rapport ces modification se sont avérées superflue.
+\section{Mesure de latence matérielle via bouton partagé}
 \label{annexe:bouton_partage}
-
-\subsection{Le Code TX (Émetteur de test : latency\_tx.c)}
-
+\url{https://github.com/TschantzN/doc-bachelor-2026/tree/main/CODES/network_latency_measurement} ou \newline
+\url{rendu_annexes_TB_Nathan_Tschantz/doc/CODES/network_latency_measurement}
+\subsection{Le Code TX (Émetteur de test : \texttt{latency\_tx.c})}
 \begin{lstlisting}[language=C]
 #include <stdio.h>
 #include <stdlib.h>
@@ -112,9 +187,8 @@ la liaison nécessaire au transport UDP.
 
 #define CHUNK_SIZE 1400
 #define SPI_DEVICE "/dev/spidev0.0"
-
-#define GPIO_BTN 17       // Pin physique 11 (Le Bouton)
-#define GPIO_HANDSHAKE 24 // Pin physique 18 (Le STM32)
+#define GPIO_BTN 17       
+#define GPIO_HANDSHAKE 24 
 
 volatile unsigned *gpio;
 
@@ -123,22 +197,19 @@ void setup_gpiomem() {
     if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
     gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
     close(mem_fd);
-
-    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en ENTREE
-    *(gpio + 1) &= ~(7 << 21); // GPIO 17 en ENTREE
+    *(gpio + 2) &= ~(7 << 12); 
+    *(gpio + 1) &= ~(7 << 21); 
 }
 
 int main() {
     int spi_fd;
-    uint32_t speed = 8000000; // 8 MHz
+    uint32_t speed = 8000000; 
     uint8_t bits = 8;
     uint32_t mode = 0;
-
     setup_gpiomem();
 
     spi_fd = open(SPI_DEVICE, O_RDWR);
     if (spi_fd < 0) { perror("SPI open"); return 1; }
-
     ioctl(spi_fd, SPI_IOC_WR_MODE, &mode);
     ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
     ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
@@ -156,65 +227,46 @@ int main() {
     };
 
     int test_step = 0;
-
     while (1) {
         if (test_step < 10) {
-            printf("\n>>> [UNITAIRE %d/10] Appuie sur le bouton pour envoyer 1 paquet...\n", test_step + 1);
+            printf("\n>>> [UNITAIRE %d/10] Appui bouton requis...\n", test_step + 1);
         } else {
-            printf("\n>>> [BURST TEST] Appuie sur le bouton pour envoyer la RAFALE de 10 paquets...\n");
+            printf("\n>>> [BURST TEST] Appui bouton requis pour rafale de 10 paquets...\n");
         }
 
-        // 1. Attente du BOUTON
-        // *(gpio + 13) lit les niveaux de pins d'entrees
         while ( (*(gpio + 13) & (1 << GPIO_BTN)) == 0 );
 
         if (test_step < 10) {
-            // --- ENVOI UNITAIRE ---
             int timeout = 0, stm_ready = 1;
             while ( (*(gpio + 13) & (1 << GPIO_HANDSHAKE)) == 0 ) {
                 if (timeout++ > 5000000) { stm_ready = 0; break; }
             }
             if (stm_ready) {
                 ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr);
-                printf(" -> Paquet envoye.\n");
                 test_step++;
-            } else {
-                printf("[ERREUR] STM32 bloque.\n");
             }
         } else {
-            // --- ENVOI EN RAFALE (BURST) ---
             int paquets_ok = 0;
             for (int i = 0; i < 10; i++) {
                 int timeout = 0, stm_ready = 1;
                 while ( (*(gpio + 13) & (1 << GPIO_HANDSHAKE)) == 0 ) {
                     if (timeout++ > 5000000) { stm_ready = 0; break; }
                 }
-                if (!stm_ready) {
-                    printf("[ERREUR] STM32 a plante au paquet %d.\n", i+1);
-                    break;
-                }
+                if (!stm_ready) break;
                 ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr);
                 paquets_ok++;
-                usleep(100); // 100us pour laisser le STM32 reagir
+                usleep(100); 
             }
-            if (paquets_ok == 10) {
-                printf(" -> Rafale de 10 paquets envoyee !\n");
-                test_step = 0; // Reinitialise le cycle de test
-            }
+            if (paquets_ok == 10) test_step = 0;
         }
-
-        // Anti-rebond du bouton
         usleep(500000); 
     }
-
     close(spi_fd);
     return 0;
 }
 \end{lstlisting}
 
-
-\subsection{Le Code RX (Chronomètre de précision : latency\_rx.c)}
-
+\subsection{Le Code RX (Chronomètre de précision : \texttt{latency\_rx.c})}
 \begin{lstlisting}[language=C]
 #include <stdio.h>
 #include <stdlib.h>
@@ -240,7 +292,7 @@ void setup_gpiomem() {
     if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
     gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
     close(mem_fd);
-    *(gpio + 1) &= ~(7 << 21); // GPIO 17 en ENTREE
+    *(gpio + 1) &= ~(7 << 21); 
 }
 
 uint64_t get_time_ns() {
@@ -249,7 +301,6 @@ uint64_t get_time_ns() {
     return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 }
 
-// Thread reseau de reception UDP
 void* udp_listener(void* arg) {
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in servaddr = {0};
@@ -257,90 +308,66 @@ void* udp_listener(void* arg) {
     servaddr.sin_addr.s_addr = INADDR_ANY;
     servaddr.sin_port = htons(PORT);
     bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr));
-
     uint8_t buffer[2000];
     
     while(1) {
         recvfrom(sockfd, (char *)buffer, sizeof(buffer), 0, NULL, NULL);
-        t_end = get_time_ns(); // Mise a jour de l'heure d'arrivee
-        packet_count++;        // Incremente le compteur de paquets recus
+        t_end = get_time_ns(); 
+        packet_count++;        
     }
     return NULL;
 }
 
 int main() {
     setup_gpiomem();
-    
     pthread_t thread_id;
     pthread_create(&thread_id, NULL, udp_listener, NULL);
-
     int test_step = 0;
     double sum_latencies = 0;
 
-    printf(">>> RX CHRONO PRET. Initialisation...\n");
-
+    printf(">>> RX CHRONO PRET.\n");
     while (1) {
-        // Preparation des variables partagees avant l'appui du bouton
         packet_count = 0;
-        
-        // 1. Attente de l'appui du bouton physique commun
         while ( (*(gpio + 13) & (1 << GPIO_BTN)) == 0 );
-
-        // 2. Lancement immediat du chronometre de test
         t_start = get_time_ns();
-        
         int target_packets = (test_step < 10) ? 1 : 10;
         
-        // 3. Attente de la reception du ou des paquets reseau
         while (packet_count < target_packets) {
-            if (get_time_ns() - t_start > 1500000000ULL) { // Timeout de securite de 1.5s
-                printf("[ERREUR] Timeout ! Seulement %d/%d paquet(s) recu(s).\n", packet_count, target_packets);
+            if (get_time_ns() - t_start > 1500000000ULL) { 
                 test_step = 0; 
                 sum_latencies = 0;
                 break;
             }
         }
 
-        // 4. Calculs de latence et Affichage
         if (packet_count == target_packets) {
             double latency_ms = (t_end - t_start) / 1000000.0;
-            
             if (test_step < 10) {
-                // Phase 1 : Test unitaire
                 printf("Test %d/10 | Latence : %.3f ms\n", test_step + 1, latency_ms);
                 sum_latencies += latency_ms;
-                
                 if (test_step == 9) {
-                    printf("------------------------------------------\n");
                     printf("MOYENNE UNITAIRE : %.3f ms\n", sum_latencies / 10.0);
-                    printf("------------------------------------------\n");
                 }
                 test_step++;
             } else {
-                // Phase 2 : Test en rafale
-                printf("==========================================\n");
                 printf("LATENCE BURST TOTALE (10 paquets) : %.3f ms\n", latency_ms);
                 printf("MOYENNE EN FLUX (Latence / 10)    : %.3f ms\n", latency_ms / 10.0);
-                printf("==========================================\n\n");
-                
-                // Fin du cycle de test, reinitialisation
                 test_step = 0;
                 sum_latencies = 0;
             }
         }
-
-        // Anti-rebond
         usleep(500000); 
     }
     return 0;
 }
 \end{lstlisting}
 
-
-\section{Code de la Gateway finale (Raspberry Pi TX)}
+\newpage
+\section{Code de la Gateway finale (Raspberry Pi TX : \texttt{gateway\_spi.c})}
+\url{https://github.com/TschantzN/doc-bachelor-2026/tree/main/CODES/MJPEG_to_SPI}
+ou \newline
+\url{rendu_annexes_TB_Nathan_Tschantz/doc/CODES/MJPEG_to_SPI}
 \label{annexe:gateway_spi}
-Le code source suivant présente l'implémentation finale en C de notre gateway d'acquisition active. Ce programme lit le flux vidéo MJPEG en continu depuis l'ISP de la caméra, identifie à la volée les délimiteurs JPEG, fragmente les trames en paquets de 1400 octets, et gère le handshake matériel avec le STM32 pour s'adapter dynamiquement au débit utile du lien radio.
-
 \begin{lstlisting}[language=C]
 #include <stdio.h>
 #include <stdlib.h>
@@ -364,12 +391,11 @@ void setup_gpiomem() {
     if (mem_fd < 0) { perror("Erreur gpiomem"); exit(1); }
     gpio = (volatile unsigned *)mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, 0);
     close(mem_fd);
-    *(gpio + 2) &= ~(7 << 12); // GPIO 24 en input
+    *(gpio + 2) &= ~(7 << 12); 
 }
 
 int wait_for_stm32_ready() {
     int timeout_counter = 0;
-    // Attente que le STM32 soit ready
     while ((* (gpio + 13) & (1 << GPIO_PIN)) == 0) {
         timeout_counter++;
         if (timeout_counter > 2000000) { return 0; }
@@ -381,10 +407,9 @@ int main() {
     int spi_fd;
     FILE *cam_pipe;
     int pipe_fd;
-    uint32_t speed = 8000000; // 8 MHz
+    uint32_t speed = 8000000; 
     uint8_t bits = 8;
     uint32_t mode = 0;
-
     setup_gpiomem();
 
     spi_fd = open(SPI_DEVICE, O_RDWR);
@@ -393,18 +418,13 @@ int main() {
     ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
     ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
 
-    // 240p60
     const char *cmd = "rpicam-vid -t 0 -n -o - --width 320 --height 240 --framerate 60 "
                       "--codec mjpeg --denoise off --exposure sport --metering centre "
                       "--awb daylight --quality 8 --flush";
 
     printf(">>> Lancement de la capture camera directe...\n");
     cam_pipe = popen(cmd, "r");
-    if (!cam_pipe) {
-        perror("Echec du lancement");
-        close(spi_fd);
-        return 1;
-    }
+    if (!cam_pipe) { close(spi_fd); return 1; }
 
     pipe_fd = fileno(cam_pipe);
     int flags = fcntl(pipe_fd, F_GETFL, 0);
@@ -424,25 +444,14 @@ int main() {
         .cs_change = 0,
     };
 
-    printf(">>> Routage SPI actif\n");
-
     while (1) {
         int n = read(pipe_fd, recv_buf + recv_len, RING_BUFFER_SIZE - recv_len);
-
-        if (n < 0) {
-            usleep(1000);
-            continue;
-        }
-        if (n == 0) {
-            printf("Flux camera interrompu.\n");
-            break;
-        }
+        if (n < 0) { usleep(1000); continue; }
+        if (n == 0) break;
         recv_len += n;
 
         while (recv_len > 4) {
-            int start_idx = -1;
-            int end_idx = -1;
-
+            int start_idx = -1, end_idx = -1;
             for (size_t i = 0; i < recv_len - 1; i++) {
                 if (recv_buf[i] == 0xFF && recv_buf[i+1] == 0xD8) { start_idx = i; break; }
             }
@@ -454,7 +463,6 @@ int main() {
 
             if (start_idx != -1 && end_idx != -1) {
                 size_t jpeg_size = end_idx - start_idx + 1;
-
                 uint8_t *frame_buffer = malloc(jpeg_size);
                 memcpy(frame_buffer, recv_buf + start_idx, jpeg_size);
 
@@ -468,7 +476,6 @@ int main() {
                 while (bytes_sent < jpeg_size) {
                     size_t to_send = jpeg_size - bytes_sent;
                     if (to_send > CHUNK_SIZE) to_send = CHUNK_SIZE;
-
                     memcpy(spi_buffer, frame_buffer + bytes_sent, to_send);
 
                     if (to_send < CHUNK_SIZE) {
@@ -480,47 +487,37 @@ int main() {
                             frame_corrupted = 1;
                             break;
                         }
-
                         int ack_timeout = 0;
                         while ((* (gpio + 13) & (1 << GPIO_PIN)) != 0) {
                             ack_timeout++;
-                            if (ack_timeout > 50000) break; // Sécurité
+                            if (ack_timeout > 50000) break; 
                         }
-
                         drop_counter = 0;
                     } else {
                         drop_counter++;
-                        if (drop_counter == 1 || drop_counter % 120 == 0) {
-                            printf("[ATTENTION] Timeout STM32 ! (%d paquets droper)\n", drop_counter);
-                        }
                         frame_corrupted = 1;
                         break;
                     }
                     bytes_sent += to_send;
                 }
-
                 free(frame_buffer);
                 if (frame_corrupted) continue;
-
             } else {
                 break;
             }
         }
     }
-
     free(recv_buf);
     pclose(cam_pipe);
     close(spi_fd);
     return 0;
 }
-
 \end{lstlisting}
-
-
-\section{Firmware MCU du transmetteur (STM32U5 / spi\_interface.c)}
-\label{annexe:firmware_stm32}
-Le code C ci-dessous présente le module d'intégration principal embarqué sur le microcontrôleur STM32U5. Il s'occupe d'initialiser le bus SPI esclave à 8 MHz, d'appliquer le profil de QoS agressif (ACI 3 / Voice) sur les files d'attente du modem Wi-Fi HaLow, et de router sans traitement les paquets SPI directement vers la pile réseau LwIP en UDP Unicast.
-
+\newpage
+\section{Firmware MCU du transmetteur (\texttt{spi\_interface.c})}
+\url{https://github.com/TschantzN/mm-iot-sdk/tree/3e1fff1c1759265c8b6c99696ab88d10826ba168/examples/spi_interface/src}
+\label{annexe:firmware_stm32} ou \newline
+\url{rendu_annexes_TB_Nathan_Tschantz/mm-iot-sdk/examples/spi_interface/src}
 \begin{lstlisting}[language=C]
 /*
  * Copyright 2021-2023 Morse Micro
@@ -559,7 +556,7 @@ volatile bool spi_packet_received = false;
 volatile uint32_t dwt_start = 0;
 volatile uint32_t dwt_end = 0;
 volatile uint32_t mcu_cycles = 0;
-extern uint32_t SystemCoreClock; // Fourni par le système STM32 (ex: 160000000 pour 160 MHz)
+extern uint32_t SystemCoreClock; // Fourni par le STM32 (ex: 160000000 pour 160 MHz)
 
 static volatile bool is_network_ready = false;
 
@@ -574,11 +571,11 @@ static void link_status_callback(const struct mmipal_link_status *link_status)
 
 
 
-static void udp_broadcast_tx_start(struct udp_pcb *pcb)
+static void udp_unicast_tx_start(struct udp_pcb *pcb)
 {
     //err_t err;
 
-    ip_set_option(pcb, SOF_BROADCAST);
+    //ip_set_option(pcb, SOF_BROADCAST);
     ip_addr_t dest_ip;
     IP4_ADDR(ip_2_ip4(&dest_ip), 192, 168, 12, 10);
 
@@ -605,7 +602,7 @@ static void udp_broadcast_tx_start(struct udp_pcb *pcb)
             	    pbuf_free(p);
             	}
 
-            	// --- ARRÊT DU CHRONO ---
+            	// --- ARRET DU CHRONO ---
             	dwt_end = DWT->CYCCNT;
             	mcu_cycles = dwt_end - dwt_start;
 
@@ -620,7 +617,7 @@ static void udp_broadcast_tx_start(struct udp_pcb *pcb)
 
                 spi_packet_received = false;
 
-                // STM32 écoute
+                // STM32 ecoute
                 HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE);
                 HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
 
@@ -651,7 +648,7 @@ static struct udp_pcb *init_udp_pcb(void)
 
 void SPI_Slave_Init(void)
 {
-    // 1. Activer les horloges du SPI1, du Port E(SPI) et port D (Spare GPIO)(go no go jetson)
+    // 1. Activer les horloges du SPI1, du Port E(SPI) et port D (Spare GPIO)
     __HAL_RCC_SPI1_CLK_ENABLE();
     __HAL_RCC_GPIOE_CLK_ENABLE();
     __HAL_RCC_GPIOD_CLK_ENABLE();
@@ -663,7 +660,7 @@ void SPI_Slave_Init(void)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
 
-    GPIO_InitStruct.Alternate = GPIO_AF5_SPI1; // Sur U5, Port E = SPI1 (AF5) !
+    GPIO_InitStruct.Alternate = GPIO_AF5_SPI1; // Sur U5, Port E = SPI1 (AF5)
     HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
     // Config SPI1
@@ -688,11 +685,10 @@ void SPI_Slave_Init(void)
         printf("SPI Esclave (SPI1) initialise sur PE12 a PE15 !\n");
     }
 
-        // --- LES 2 LIGNES MANQUANTES POUR LE MODE '_IT' --- mode IT ?
 	HAL_NVIC_SetPriority(SPI1_IRQn, 5, 0);
 	HAL_NVIC_EnableIRQ(SPI1_IRQn);
 
-	// Initialisation de la broche Handshake (PD15) (Go no go jetson)
+	// Initialisation de la broche Handshake (PD15)
 	GPIO_InitTypeDef GPIO_InitStruct_Handshake = {0};
 	GPIO_InitStruct_Handshake.Pin = GPIO_PIN_15;
 	GPIO_InitStruct_Handshake.Mode = GPIO_MODE_OUTPUT_PP;
@@ -700,16 +696,15 @@ void SPI_Slave_Init(void)
 	GPIO_InitStruct_Handshake.Speed = GPIO_SPEED_FREQ_HIGH;
 	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct_Handshake);
 }
-// Quand le STM32 a reçu un paquet
+// Quand le STM32 a recu un paquet
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     if (hspi->Instance == SPI1) {
-    	// Démarrer le chrono
+    	// Demarrer le chrono
     	dwt_start = DWT->CYCCNT;
     	// mesure
     	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
         spi_packet_received = true;
-        //HAL_SPI_Receive_IT(&hspi1, spi_rx_buffer, SPI_PAYLOAD_SIZE); //ca faisait un double receive donc erreur -> donc un peut de lantence en plus
     }
 }
 
@@ -764,7 +759,7 @@ void app_init(void)
     struct udp_pcb *pcb = init_udp_pcb();
     if (pcb != NULL) {
     	pcb->tos = 0xC0;
-        udp_broadcast_tx_start(pcb);
+        udp_unicast_tx_start(pcb);
     }
 }
 
@@ -772,122 +767,72 @@ void app_init(void)
 
 \section{Système de transmission alternatif DVB-T2 (SDR / BladeRF)}
 \label{annexe:dvbt2_system}
+Dans le cadre d'une comparaison, un système de transmission basé sur la norme de télévision numérique \textbf{DVB-T2} a été évalué. L'objectif était de comparer le Wi-Fi HaLow à un système utilisant le protocole industriel de diffusion par flux MPEG Transport Stream (MPEG-TS) via une SDR.
 
-Dans le cadre d'une étude comparative menée lors des phases intermédiaires du projet, un système de transmission broadcast alternatif basé sur la norme de télévision numérique terrestre \textbf{DVB-T2} a été implémenté et évalué. Cette expérimentation visait à confronter l'architecture Wi-Fi HaLow à un protocole industriel standard de diffusion robuste d'un flux MPEG Transport Stream (MPEG-TS) via une radio logicielle (SDR).
-
-\subsection{Matériel et architecture logique}
-L'architecture de test DVB-T2 repose sur les composants suivants :
+\subsection{Matériel et architecture}
+L'architecture de test DVB-T2 comprend :
 \begin{itemize}
-    \item \textbf{Émetteur (TX) :} Une Raspberry Pi 4B connectée via USB 3.0 à une carte SDR \textbf{BladeRF xA9}. La Raspberry Pi assure la capture vidéo et l'encapsulation MPEG-TS en temps réel avant d'injecter le flux binaire directement sur l'interface d'émission de la BladeRF.
+    \item \textbf{Émetteur (TX) :} Une Raspberry Pi 4B connectée en USB 3.0 à une SDR \textbf{BladeRF xA9} assurant la capture et l'encapsulation MPEG-TS.
     \item \textbf{Récepteur (RX) :} Un PC Windows équipé d'un dongle récepteur DVB-T2 USB standard (DVB Adapter 2).
 \end{itemize}
 
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=0.85\textwidth]{imgs/dvbt2_schematic.png}
-    \caption{Architecture logique de la chaîne de transmission comparative DVB-T2}
-    \label{fig:dvbt2_schematic}
-\end{figure}
+\subsection{Configuration et pipeline de l'émetteur (Raspberry Pi)}
 
-\subsection{Configuration de l'émetteur BladeRF (Raspberry Pi)}
-Pour assurer la transmission, la BladeRF doit être flashée avec son image FPGA correspondante. Les commandes système suivantes permettent de charger l'image en mémoire non volatile, de lister la carte et d'interagir avec l'appareil :
-
+Le chargement du FPGA de la BladeRF s'effectue via les commandes :
 \begin{lstlisting}[language=bash]
-# Chargement de la dernière version de l'image FPGA dans la mémoire Flash
 sudo bladeRF-cli -L hostedxA9-latest.rbf
-
-# Vérification de la détection de la carte sur le bus USB
 bladeRF-cli -p
-
-# Entrée en mode interactif pour l'administration de la SDR
-sudo bladeRF-cli -i
+# puis 
+sudo bladeRF-cli -L output.rbf # fournit par un ingénieur de l'IICT
 \end{lstlisting}
+rendu\_annexes\_TB\_Nathan\_Tschantz/Flash\_BladeRF\newline
 
-En mode interactif, les paramètres radiofréquences et la transmission du flux sont pilotés par un fichier de configuration dédié nommé \texttt{config.conf} :
+Le flux vidéo issu de la caméra est encodé en H.264 (profil \textit{baseline}, option \textit{zerolatency}), multiplexé en MPEG-TS, puis injecté directement via l'entrée standard (\texttt{stdin}) dans l'utilitaire \texttt{bladeRF-cli} sur le cœur isolé 3 :
 
-\begin{lstlisting}[language=text]
-# --- Contenu du fichier config.conf ---
-set frequency tx1 634M
-set bandwidth tx1 8M
-set samplerate tx1 20M
-set gain tx1 60
-
-set frequency tx2 634M
-set bandwidth tx2 8M
-set samplerate tx2 20M
-set gain tx2 60
-
-tx config timeout=80000
-tx config file=/dev/stdin format=bin channel=1,2
-tx start
-tx wait
-\end{lstlisting}
-
-Le flux vidéo issu de la caméra est encodé en H.264 par GStreamer (profil \textit{baseline}, compression \textit{ultrafast} sans latence), multiplexé en MPEG-TS et redirigé via un tube anonyme (\textit{pipe}) vers l'entrée standard (\texttt{stdin}) de l'utilitaire \texttt{bladeRF-cli} s'exécutant sur le cœur de processeur isolé 3 de la Raspberry Pi :
 
 \begin{lstlisting}[language=bash]
-# Pipeline d'émission DVB-T2 via redirection de flux standard (stdin)
 sudo taskset -c 3 nice -n -20 gst-launch-1.0 -q \
   libcamerasrc ! \
   video/x-raw,width=640,height=480,framerate=30/1 ! \
   videoconvert ! queue max-size-buffers=2 leaky=downstream ! \
-  x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=1500 ! \
+  x264enc tune=zerolatency speed-preset=ultravast key-int-max=30 bitrate=1500 ! \
   video/x-h264,profile=baseline ! \
   mpegtsmux alignment=7 ! \
   fdsink fd=1 sync=false | \
-sudo bladeRF-cli -e "set samplerate tx1 20M" \
-            -e "set bandwidth tx1 8M" \
-            -e "set frequency tx1 634M" \
-            -e "set gain tx1 60" \
-            -e "set samplerate tx2 20M" \
-            -e "set bandwidth tx2 8M" \
-            -e "set frequency tx2 634M" \
-            -e "set gain tx2 60" \
+sudo bladeRF-cli -e "set samplerate tx1 20M" -e "set bandwidth tx1 8M" \
+            -e "set frequency tx1 634M" -e "set gain tx1 60" \
+            -e "set samplerate tx2 20M" -e "set bandwidth tx2 8M" \
+            -e "set frequency tx2 634M" -e "set gain tx2 60" \
             -e "tx config timeout=80000" \
             -e "tx config file=/dev/stdin format=bin channel=1,2" \
             -e "tx start" -e "tx wait"
 \end{lstlisting}
-
+\textit{Note : Le format MJPEG n'a pas été exploité, l'encapsulation MPEG-TS ne prenant pas en charge nativement ce codec.}
+\newpage
 \subsection{Configuration du récepteur et décodage (PC Windows)}
-Deux méthodes d'acquisition ont été expérimentées sur la station de réception au sol afin d'isoler l'origine de la latence de traitement du flux MPEG-TS.
+Deux méthodes d'acquisition ont été expérimentées sur la station de réception afin d'analyser l'impact des couches logicielles sur la latence du flux MPEG-TS.
 
 \subsubsection{Approche standard : VLC Media Player}
 La première solution s'appuie sur VLC pour s'accorder sur la fréquence UHF de 634 MHz, extraire le flux réseau démodulé et le renvoyer en UDP local vers GStreamer :
-
 \begin{lstlisting}[language=bash]
-# Fermeture des instances VLC actives pour libérer le dongle USB
-taskkill /F /IM vlc.exe
-
-# Lancement de l'acquisition DVB-T2 et encapsulation vers l'adresse locale loopback
+# Lancement de l'acquisition DVB-T2 et encapsulation vers le port local
 "C:\Program Files (x86)\VideoLAN\VLC\vlc.exe" "dvb-t2://frequency=634000000:bandwidth=8" :dvb-adapter=2 :dvb-a-modulation=QPSK :dvb-plp-id=0 :live-caching=50 --sout="#std{access=udp,mux=ts,dst=127.0.0.1:1234}" --sout-mux-caching=50 --network-caching=50 -I dummy
 \end{lstlisting}
-
-\subsubsection{Approche optimisée : TSDuck}
-Pour s'affranchir des tampons internes importants de VLC, l'outil d'analyse de flux MPEG \textbf{TSDuck} a été configuré pour assurer une réception à très faible latence :
-
+\newpage
+\subsubsection{Approche secondaire : TSDuck}
+Pour s'affranchir des tampons internes importants de VLC, l'outil d'analyse de flux MPEG \textbf{TSDuck} a été configuré pour assurer une réception directe et plus brute :
 \begin{lstlisting}[language=bash]
 # Capture directe du canal physique et redirection brute en UDP via TSDuck
 tsp.exe -v -I dvb --adapter 2 --delivery-system DVB-T --frequency 634000000 --bandwidth 8000000 --modulation QPSK --transmission-mode auto --guard-interval auto --high-priority-fec auto --signal-timeout 10 -O ip 127.0.0.1:1234
 \end{lstlisting}
 
 \subsubsection{Pipeline d'affichage GStreamer (Commun aux deux méthodes)}
-Indépendamment de l'outil d'acquisition (VLC ou TSDuck), le flux de transport MPEG-TS démodulé et réceptionné sur le port local \texttt{1234} est extrait, décodé et affiché par GStreamer à l'aide de l'accélération Direct3D 11 :
-
+Indépendamment de l'outil d'acquisition amont (VLC ou TSDuck), le flux de transport MPEG-TS démodulé et réceptionné sur le port local \texttt{1234} est extrait, décodé matériellement et affiché par GStreamer via Direct3D 11 :
 \begin{lstlisting}[language=bash]
-# Décodage matériel basse latence du flux MPEG-TS
-gst-launch-1.0.exe -v ^
-  udpsrc port=1234 caps="video/mpegts" ! ^
-  tsdemux ! ^
-  queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream ! ^
-  h264parse config-interval=-1 ! ^
-  avdec_h264 max-threads=1 ! ^
-  videoconvert ! ^
-  d3d11videosink sync=false
+gst-launch-1.0.exe -v udpsrc port=1234 caps="video/mpegts" ! tsdemux ! queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream ! h264parse config-interval=-1 ! avdec_h264 max-threads=1 ! videoconvert ! d3d11videosink sync=false
 \end{lstlisting}
 
-\subsection{Bilan des mesures et goulots d'étranglement}
-Bien que la modulation QPSK opérée par la SDR BladeRF offre une excellente immunité face aux perturbations, la latence mesurée s'est avérée totalement rédhibitoire pour le pilotage FPV :
-\begin{itemize}
-    \item \textbf{Latence globale moyenne :} Comprise entre \textbf{2 et 7 secondes}.
-    \item \textbf{Origine du goulot d'étranglement :} La structure même du multiplexage MPEG-TS (qui impose l'insertion régulière de tables de signalisation PAT/PMT et de paquets de bourrage pour maintenir un débit constant) combinée aux importants tampons mémoires des pilotes matériels de réception DVB des dongles USB grand public empêche toute réduction substantielle de la latence de transit, validant ainsi la nécessité d'utiliser notre architecture personnalisée Wi-Fi HaLow.
-\end{itemize}
+\subsection{Bilan des mesures}
+Bien que la modulation QPSK et la faible fréquence (630Mhz) offre une excellente immunité face aux perturbations, la latence mesurée s'est avérée incompatible avec le pilotage FPV, s'établissant entre 2 et 7 secondes. L'ajustement à la baisse des paramètres de mise en mémoire tampon (\textit{caching}) permet de stabiliser la latence autour de 2 secondes.
+
+\end{document}

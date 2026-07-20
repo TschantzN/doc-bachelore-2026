@@ -34,7 +34,11 @@ la latence de base du ping à sa valeur matérielle brute, située entre \textbf
 \subsection{Stratégie de transport UDP : Du Broadcast à l'Unicast optimisé}
 La couche transport exploite le protocole UDP pour s'affranchir de la gestion des connexions et des 
 retransmissions inhérentes à TCP. L'élimination des délais au niveau de la couche liaison (MAC 802.11ah) 
-a quant à elle nécessité deux approches successives.
+a quant à elle nécessité deux approches successives.\newline \newline
+
+Dans les deux cas le flux vidéo UDP est dirigé vers le port destination 1337. Ce choix de port non privilégié ($> 1024$) garantit 
+qu'aucun conflit avec un service réseau système de l'OS récepteur ne survienne, tout en permettant au pipeline 
+d'affichage GStreamer de s'exécuter directement en espace utilisateur sans requérir de privilèges administrateur. 
 
 \subsubsection{L'approche initiale : UDP Broadcast et rétention DTIM}
 Pour écarter la contrainte d'attente des acquittements matériels (MAC ACKs), la première stratégie consistait à émettre 

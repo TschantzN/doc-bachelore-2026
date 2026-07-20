@@ -21,13 +21,34 @@ seulement \textbf{12.5 millisecondes}. Mesurée sur un affichage à 165 Hz, la l
 (\textit{Glass-to-Glass}) s'établit autours de \textbf{40ms en moyenne}, avec des pointes récurrentes à 
 \textbf{30 ms}. L'objectif initial de viabilité fixé à 80 ms est largement dépassé, validant définitivement
 la pertinence du standard Wi-Fi HaLow pour le contrôle de drone en temps réel.
+\newpage
+\subsection{Perspectives et travaux futurs}
+Afin de faire évoluer ce prototype plusieurs axes d'amélioration peuvent être envisagés :
 
-\newline 
-\newline
+\begin{enumerate}
+    \item \textbf{Intégration matérielle sur PCB unique (TX) :}
+    Pour améliorer la résistance aux vibrations et la stabilité des connexions, le développement d'une carte 
+    électronique dédiée intégrant un Compute Module (ex. CM4), le microcontrôleur de routage et le SoC Morse Micro MM8108 
+    sur un même circuit imprimé constitue la suite logique du projet.
 
+    \item \textbf{Simplification de la station au sol (RX) :}
+    Raccorder directement la puce de réception HaLow à l'unité d'affichage au sol permettrait de supprimer le routeur OpenWrt intermédiaire 
+    et la liaison Ethernet filaire, réduisant ainsi l'encombrement du système sol tout en éliminant le temps de transit du pont logiciel.
+
+    \item \textbf{Accélération matérielle et gestion dynamique du flux :}
+    L'exploration d'un encodage JPEG dédié sur FPGA ou pipeline matériel VPU permettrait d'abaisser le temps d'acquisition de l'image. 
+    De plus, la mise en place d'une régulation dynamique de la qualité JPEG en boucle fermée selon le niveau de signal radio (RSSI) 
+    optimiserait la robustesse de la transmission dans les zones d'atténuation sévère.
+
+    \item \textbf{Déblocage de la puissance radio (Gain en portée) :}
+    La résolution du bridage logiciel de l'émetteur embarqué (actuellement limité à 14 dBm) permettra d'atteindre les 26 dBm du composant, 
+    démultipliant ainsi la portée utile et la capacité de pénétration en milieu fortement obstrué (conditions NLOS).
+\end{enumerate}
+
+\vspace{0.5cm}
 Les notes journalières, le journal de travail, les diagrammes de Gantt associés au développement 
 de ce projet (/JOURNAL)  et les codes accompagnés des instructions de mise en place (/CODES) sont accessibles à l'adresse suivante : \newline
-\url{https://github.com/TschantzN/doc-bachelor-2026}
+\url{https://github.com/TschantzN/doc-bachelor-2026} et dans les annexes.
 
 \begin{flushright}
     \begin{minipage}{5cm}
