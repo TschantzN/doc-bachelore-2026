@@ -8,7 +8,7 @@ vidéo basse latence, les acronymes et concepts techniques suivants seront coura
     \item[Compression Inter-frame :] Méthode de compression vidéo temporelle (utilisée par le H.264 et le H.265) 
     qui encode les différences entre plusieurs images consécutives. Bien qu'extrêmement économe en bande passante, 
     elle exige la mise en mémoire tampon et l'analyse de dépendances temporelles de plusieurs trames au décodage, 
-    introduisant une latence logicielle structurelle incompatible avec le FPV.
+    introduisant une latence logicielle incompatible avec le FPV.
     
     \item[Compression Intra-frame :] Méthode de compression vidéo exclusivement spatiale (utilisée par le MJPEG) 
     où chaque image est compressée de manière totalement autonome, à la manière d'une photographie JPEG isolée. 
@@ -37,7 +37,7 @@ vidéo basse latence, les acronymes et concepts techniques suivants seront coura
     
     \item[FreeRTOS / RTOS :] (\textit{Real-Time Operating System}) Système d'exploitation temps réel open-source 
     pour microcontrôleurs. Contrairement à un OS classique (comme Linux), un RTOS garantit l'exécution des tâches 
-    dans des délais stricts et déterministes, minimisant ainsi la gigue logicielle lors du routage des données.
+    dans des délais stricts et déterministes, minimisant ainsi la gigue logicielle.
     
     \item[Gigue (\textit{Jitter}) :] Variation temporelle de la latence. Dans un flux vidéo en temps réel, une 
     forte gigue (des paquets arrivant en rafales irrégulières) provoque des saccades visuelles souvent plus 
@@ -47,9 +47,8 @@ vidéo basse latence, les acronymes et concepts techniques suivants seront coura
     configurée par logiciel comme entrée ou sortie numérique (utilisée dans ce projet pour le signal de 
     \textit{Handshake}).
     
-    \item[GStreamer :] Framework multimédia open-source reposant sur une architecture de graphes (pipelines). Il 
-    permet de chaîner des éléments logiciels pour capturer, encoder, transmettre et décoder de la vidéo avec une 
-    latence minimale.
+    \item[GStreamer :] Framework multimédia open-source reposant sur une architecture de pipelines. Il 
+    permet de chaîner des éléments logiciels pour capturer, encoder, transmettre et décoder de la vidéo.
     
     \item[Jetson Nano :] Nano-ordinateur développé par Nvidia, équipé d'un processeur ARM et d'un processeur 
     graphique (GPU) intégré, utilisé lors des premières phases d'expérimentation du projet.
@@ -74,7 +73,7 @@ vidéo basse latence, les acronymes et concepts techniques suivants seront coura
     électronique au cœur de ce projet, chargé de la modulation et de l'émission des ondes Wi-Fi HaLow.
     
     \item[NLOS (\textit{Non-Line-Of-Sight}) :] Situation de communication radio où l'émetteur et le récepteur 
-    ne sont pas en ligne de vue directe (présence de bâtiments, de dalles en béton ou de relief).
+    ne sont pas en ligne de vue directe (présence de bâtiments, arbres ou de relief).
     
     \item[OpenHD :] Système d'exploitation open-source basé sur Linux, conçu par la communauté FPV pour 
     transmettre de la vidéo numérique longue portée en détournant des puces Wi-Fi standards (2.4 et 5.8 GHz).

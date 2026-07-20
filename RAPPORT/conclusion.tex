@@ -1,12 +1,12 @@
 \section{Conclusion}
 Le pilotage de drones FPV (\textit{First Person View}) en environnement complexe se heurte depuis 
 toujours à l'incapacité des fréquences standards (2.4 GHz et 5.8 GHz) à pénétrer efficacement les 
-obstacles physiques. Ce travail de Bachelor visait à évaluer une solution de rupture en détournant 
+obstacles physiques. Ce travail de Bachelor visait à évaluer une solution différente en détournant 
 la norme IEEE 802.11ah (Wi-Fi HaLow) pour y faire transiter un flux vidéo en temps réel sur la bande Sub-1 GHz. 
-Au terme de ce projet, l'architecture globale du système a été établie et optimisée jusqu'à ses limites 
-physiques et logicielles pour répondre aux exigences de réactivité du vol en immersion.\newline
+Au terme de ce projet, l'architecture globale du système a été établie et optimisée pour répondre aux exigences 
+de réactivité du vol en immersion.\newline
 
-Le succès de ce travail repose sur un changement de paradigme logiciel dicté par la réalité des mesures. 
+Le succès de ce travail repose sur un changement de paradigme logiciel dicté par les mesures. 
 L'approche initiale en H.264, bien que très économe en bande passante, s'est heurtée à une latence plancher 
 de 100 ms induite par la reconstruction temporelle des codecs inter-trames. Pour briser ce plafond de verre, 
 le système a été entièrement refondu autour d'un codec exclusivement intra-trame (MJPEG). Cette transition a 
@@ -22,7 +22,7 @@ seulement \textbf{12.5 millisecondes}. Mesurée sur un affichage à 165 Hz, la l
 \textbf{30 ms}. L'objectif initial de viabilité fixé à 80 ms est largement dépassé, validant définitivement
 la pertinence du standard Wi-Fi HaLow pour le contrôle de drone en temps réel.
 
-\newline
+\newline 
 \newline
 
 Les notes journalières, le journal de travail, les diagrammes de Gantt associés au développement 

@@ -1,6 +1,6 @@
 \section{Capture et traitement du flux vidéo}
-Une fois le pont réseau Sub-1 GHz configuré sur ses couches basses, le défi consiste à formater la source 
-vidéo pour qu'elle puisse traverser ce canal sans générer de goulots d'étranglement applicatifs. Cette 
+Une fois le pont réseau Sub-1 GHz configuré, le défi consiste à formater la source 
+vidéo pour qu'elle puisse traverser ce canal sans générer de goulots d'étranglement. Cette 
 section détaille l'arbitrage entre les codecs, le profilage des flux et l'optimisation des pipelines.
 
 \subsection{La phase d'expérimentation : L'analyse des codecs inter-frames (H.264 et H.265)}
@@ -10,8 +10,8 @@ L'étude initiale du projet s'est orientée vers les standards de compression vi
 \subsubsection{Arbitrage initial entre H.264 et H.265}
 La première architecture évaluée ciblait la norme \textbf{H.265 (HEVC)}. Ce codec offre théoriquement une 
 efficacité de compression supérieure de 50 \% par rapport au H.264, permettant de conserver une image 
-exploitable à un débit extrêmement bas (400 kbps). Cependant, sa complexité algorithmique s'est heurtée à 
-la réalité matérielle : l'absence d'un pilote de décodage matériel H.265 stable et performant sous Linux 
+exploitable à un débit extrêmement bas (>1 Mbps). Cependant, sa complexité algorithmique s'est heurtée au
+ matérielle : l'absence d'un pilote de décodage matériel H.265 sous Linux 
 (\texttt{v4l2h265dec}) a provoqué une surcharge CPU massive sur nos plateformes, élevant la latence à plus de 300 ms.
 
 Le système a donc été basculé vers la norme \textbf{H.264 (AVC)}. Ce choix a permis d'exploiter les puces de 
@@ -55,8 +55,8 @@ permis de lever le goulot d'étranglement de la couche physique, offrant le déb
 les exigences du format JPEG sans perte de paquets.
 
 \subsubsection{Profilage du flux MJPEG et fragmentation réseau}
-Afin de quantifier précisément les besoins en bande passante du flux MJPEG final, une mesure de métrologie 
-systématique a été menée. Un enregistrement continu d'une minute (60 secondes) a été capturé en conditions réelles 
+Afin de quantifier précisément les besoins en bande passante du flux MJPEG final, une mesure a été menée. 
+Un enregistrement continu d'une minute a été capturé en conditions réelles 
 en agitant la caméra pour simuler le comportement dynamique d'un vol :
 \begin{lstlisting}[language=bash]
 rpicam-vid -t 60000 -n -o fpv_test_1min.mjpeg --width 320 --height 240 --framerate 60 --codec mjpeg --denoise off --exposure sport --metering centre --awb daylight --quality 8 --flush
@@ -99,13 +99,13 @@ rpicam-vid -t 0 -n -o - --width 320 --height 240 --framerate 60 --codec mjpeg \
 \textit{Note : les paramètres optimaux pour le H.264 peuvent être retrouvés dans le rapport intermédiaire.}
 
 \subsubsection{Précisions sur les paramètres d'envoi}
-Les arguments passés à la ligne de commande visent à supprimer tout traitement d'image adaptatif ou asynchrone :
+Les arguments passés à la ligne de commande visent à supprimer tout traitement d'image adaptatif :
 \begin{itemize}
     \item \textbf{\texttt{--flush} :} Force l'expulsion immédiate des données JPEG compressées de l'espace noyau vers la sortie standard (\textit{stdout}), court-circuitant les tampons de cache en écriture du système d'exploitation de la Raspberry Pi.
-    \item \textbf{\texttt{--width 320 --height 240} (Downscaling matériel) :} L'ISP du capteur IMX219 effectue un sous-échantillonnage matériel direct sur la matrice de pixels. Cela réduit drastiquement le poids des données à traiter sans solliciter le processeur principal de la carte.
-    \item \textbf{\texttt{--denoise off} :} Désactive l'algorithme de réduction du bruit numérique, éliminant ainsi une étape de calcul asynchrone sur l'ISP.
-    \item \textbf{\texttt{--exposure sport} et \texttt{--awb daylight} :} Gèle l'exposition automatique sur des temps d'obturation très courts (sport) et fixe la balance des blancs. Cela évite les variations du temps de calcul de l'ISP lors des changements brusques de luminosité en vol.
-    \item \textbf{\texttt{--quality 8} :} Règle la table de quantification JPEG sur une compression forte. Ce paramètre clé maintient le flux utile moyen autour de 1.5 Mbps, lui permettant de traverser le canal radio de 8 MHz sans saturation.
+    \item \textbf{\texttt{--width 320 --height 240} (Downscaling matériel) :} L'ISP du capteur IMX219 effectue un sous-échantillonnage matériel direct. Cela réduit drastiquement le poids des données à traiter sans solliciter le processeur principal de la carte.
+    \item \textbf{\texttt{--denoise off} :} Désactive l'algorithme de réduction du bruit numérique, éliminant ainsi une étape de calcul sur l'ISP.
+    \item \textbf{\texttt{--exposure sport} et \texttt{--awb daylight} :} Gèle l'exposition automatique sur des temps d'obturation très courts (sport) et fixe la balance des blancs. Cela évite les variations du temps de calcul de l'ISP lors des changements brusques de luminosité.
+    \item \textbf{\texttt{--quality 8} :} Règle la table de quantification JPEG sur une compression forte (100\% étant la qualité max, ici nous avons donc une qualité de 8\%). Ce paramètre clé maintient le flux utile moyen autour de 1.5 Mbps, lui permettant de traverser le canal radio de 8 MHz sans saturation.
 \end{itemize}
 
 \newpage
@@ -128,6 +128,7 @@ gst-launch-1.0 -v udpsrc port=1337 do-timestamp=true ! \
 jpegparse ! jpegdec ! queue max-size-buffers=1 leaky=downstream ! \
 videoconvert ! autovideosink sync=false
 \end{lstlisting}
+\textit{Note : les paramètres optimaux pour le H.264 peuvent être retrouvés dans le rapport intermédiaire.}
 
 \subsubsection{Précisions sur les paramètres de réception}
 \begin{itemize}

@@ -10,7 +10,7 @@ induisent une latence et une gigue incompatibles avec les exigences strictes du 
 
 \textbf{Méthode :} Ce travail implémente une architecture de bout en bout optimisée pour le temps réel. 
 Un programme en C développé sur la Raspberry Pi isole et fragmente activement les images d'un flux vidéo 
-MJPEG natif en paquets autonomes, transmis via SPI à un microcontrôleur STM32. La liaison radio 
+MJPEG en paquets autonomes, transmis via SPI à un microcontrôleur STM32. La liaison radio 
 est configurée en UDP Unicast sur une modulation fixe et robuste (MCS 1, 8 MHz), tandis que les paramètres 
 d'accès au canal de la Qualité de Service (QoS MAC) du modem sont forcés pour éliminer les temps d'attente 
 inter-trames.
@@ -31,7 +31,7 @@ latency and jitter incompatible with the strict requirements of immersive flight
 
 \textbf{Method :} This work implements an end-to-end architecture tailored for absolute real-time 
 transmission. A custom C program running on the Raspberry Pi actively isolates and fragments 
-native MJPEG video frames into autonomous packets, which are transmitted over SPI to a STM32 microcontroller. 
+MJPEG video frames into autonomous packets, which are transmitted over SPI to a STM32 microcontroller. 
 The radio link is configured using UDP Unicast on a robust, fixed modulation scheme (MCS 1, 8 MHz), 
 while the modem's MAC Quality of Service (QoS) channel access parameters are forced to eliminate 
 inter-frame waiting times.

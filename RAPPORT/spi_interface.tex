@@ -6,7 +6,7 @@
     \label{fig:complet_schematic_nb4}
 \end{figure}
 
-Le transfert du flux vidéo compressé entre le processeur d'acquisition (Raspberry Pi TX) et le modem radio 
+Le transfert du flux vidéo compressé entre le processeur d'acquisition (Raspberry Pi) et le modem radio 
 (STM32) s'effectue via le bus matériel SPI. Cette étape est critique car elle conditionne le rythme 
 d'envoi des données au MCU avant l'émission RF.
 
@@ -50,9 +50,9 @@ C (situé entre l'outil de capture et le bus SPI). En H.264, le flux pouvait êt
 MJPEG, envoyer des morceaux bruts aléatoires à travers le réseau causait des plantages du décodeur 
 GStreamer à la réception, qui ne tolère aucune corruption de structure.
 
-Le programme d'émission (voir code complet en \textbf{Annexe A}) agit désormais comme un véritable parseur actif :
+Le programme d'émission agit désormais comme un parseur actif :
 \begin{enumerate}
-    \item \textbf{Isolation des images :} Il lit le flux continu depuis l'OS en mode non-bloquant et 
+    \item \textbf{Isolation des images :} Il lit le flux continu depuis l'OS de manière non-bloquante et 
     scanne les octets à la volée pour identifier les marqueurs standards du protocole JPEG : 
     \texttt{0xFF 0xD8} (Début d'image - SOI) et \texttt{0xFF 0xD9} (Fin d'image - EOI).
     \item \textbf{Slicing à 1400 octets :} Une fois une image complète isolée en RAM, il la fragmente 
@@ -94,7 +94,7 @@ de l'émetteur sans aucune perte interne au système.
 
 \subsection{Optimisation de l'ordonnancement OS et Overclocking}
 Afin de garantir un comportement strictement déterministe et d'éliminer la gigue (\textit{jitter}) 
-introduite par l'ordonnanceur multitâche du noyau Linux, deux optimisations système agressives ont été 
+introduite par l'ordonnanceur multitâche du noyau Linux, deux optimisations système ont été 
 appliquées sur la Raspberry Pi (TX).
 
 \subsubsection{Overclocking et verrouillage des fréquences}
@@ -106,7 +106,7 @@ des blocs de données sur le bus SPI.
 Pour figer le système dans son état de performance maximal, la configuration de démarrage \newline (\texttt{/boot/firmware/config.txt}) 
 a été modifiée pour overclocker le processeur ARM à une fréquence stable de \textbf{2.0 GHz} (\texttt{arm\_freq=2000}). De plus, 
 le gouverneur CPU de Linux a été configuré sur le mode \textit{Performance} pour interdire toute baisse de fréquence 
-(voir les détails et le fichier de configuration complet en \textbf{Annexe B}).
+(voir les détails de la configuration complète sur le github indiqué en fin de conclusion).
 
 \subsubsection{Isolation du cœur CPU}
 Pour s'assurer que le programme d'émission en C (\texttt{gateway\_spi.c}) et la capture caméra (\texttt{rpicam-vid}) 
@@ -126,4 +126,4 @@ sudo taskset -c 3 nice -n -20 ./gateway_spi
 
 Cette approche se rapprochant d'un fonctionnement \textit{Bare-Metal} garantit que le cœur 3 est dédié à 100 \% 
 au parsing des images et aux transactions SPI matérielles. Cela a permis d'éviter à l'OS de préempter notre processus 
-en tâche de fond.
+en tâche de fond. (voir les détails de la configuration complète sur le github indiqué en fin de conclusion).

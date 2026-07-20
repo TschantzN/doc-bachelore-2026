@@ -42,16 +42,18 @@ le flux vidéo sur l'adresse de diffusion locale (\texttt{192.168.12.255}). LwIP
 l'adresse MAC de destination globale \texttt{FF:FF:FF:FF:FF:FF}. Selon la norme 802.11, les trames diffusées 
 en \textit{Broadcast} ne déclenchent aucun acquittement de la part des récepteurs.
 
-Cependant, les tests d'émission ont révélé un goulot d'étranglement majeur induit par le routeur OpenWrt de réception. 
-Selon les spécifications de la norme IEEE 802.11, les points d'accès ont l'obligation réglementaire de mettre en mémoire tampon 
-les trames de diffusion (\textit{Broadcast/Multicast}) et de ne les libérer qu'immédiatement après la transmission d'une balise de 
-signalisation spécifique appelée DTIM (\textit{Delivery Traffic Indication Message}). Ce mécanisme est conçu à l'origine pour permettre 
-aux stations IoT de rester en veille profonde et de ne se réveiller que périodiquement pour écouter le trafic global. 
+Cependant, les expérimentations ont rapidement mis en évidence les limites de cette approche au niveau du point d'accès OpenWrt. 
+Selon les spécifications de la norme IEEE 802.11, les points d'accès mettent en mémoire tampon 
+les trames de diffusion (\textit{Broadcast/Multicast}) afin de ne les libérer qu'à des intervalles réguliers, synchronisés 
+avec l'émission des balises de signalisation appelées DTIM (\textit{Delivery Traffic Indication Message}). Ce mécanisme, 
+conçu à l'origine pour permettre aux équipements IoT sur batterie de ne sortir de veille que périodiquement, 
+impose une rétention asynchrone des données au niveau du routeur.
 
-Avec un intervalle de balise par défaut de 100 ms et un paramètre DTIM configuré à 2 sur OpenWrt, le point d'accès ne libérait 
-les données accumulées que toutes les 200 ms. L'analyse des captures a mis en évidence une rétention logicielle asynchrone 
-induisant une latence et une gigue colossales d'environ \textbf{40 ms}. Le passage en Unicast a permis de contourner immédiatement 
-ce tampon pour envoyer chaque paquet en flux tendu.
+Plutôt que d'être transmis en flux tendu au fil de leur arrivée sur l'interface radio, les paquets vidéo se trouvaient 
+accumulés puis libérés par rafales saccadées. Ce comportement a introduit une gigue (\textit{jitter}) importante et une 
+instabilité de la latence globale, incompatibles avec la fluidité requise pour le pilotage FPV. Le passage ultérieur en 
+\textbf{UDP Unicast} a permis de contourner complètement ces tampons de diffusion pour transmettre chaque paquet 
+immédiatement après sa réception par le modem.
 
 \subsubsection{La solution finale : UDP Unicast et forçage de la QoS (WMM/EDCA)}
 Pour contourner la rétention liée au DTIM, la liaison a été basculée en \textbf{UDP Unicast}, ciblant 
@@ -126,12 +128,12 @@ mmwlan_ate_override_rate_control(MMWLAN_MCS_1, MMWLAN_BW_8MHZ, MMWLAN_GI_NONE);
 \end{lstlisting}
 
 En forçant l'utilisation du protocole sur le \textbf{MCS 1} avec une largeur de bande de \textbf{8 MHz}, la couche physique (PHY) 
-affiche un débit de synchronisation théorique de **6.4 Mbps** (en Short Guard Interval). Il est cependant crucial de distinguer ce débit 
-brut de la bande passante utile réellement disponible pour les données utilisateur (\textit{data payload}). 
+affiche un débit théorique de 6.4 Mbps (en Short Guard Interval). Il est cependant crucial de distinguer ce débit 
+brut de la bande passante utile réellement disponible pour les données utilisateur. 
 
 En raison des en-têtes de protocoles empilés (PHY, MAC 802.11ah, IP, UDP), des temps d'attente inter-trames obligatoires (IFS) et 
 surtout de la réintroduction des acquittements MAC en mode Unicast, le débit utile réel disponible au niveau applicatif s'effondre 
 à \textbf{moins de 50 \%} de la bande passante PHY théorique (soit environ 2.5 à 3 Mbps dans des conditions parfaites de laboratoire). En 
 situation de vol réel avec un rapport signal-sur-bruit (SNR) dégradé, cette limite utile s'approche des \textbf{1.5 Mbps}. Ce constat 
-justifie scientifiquement le dimensionnement de notre flux MJPEG, volontairement contraint et profilé sous ce seuil critique pour éviter 
+justifie le dimensionnement de notre flux MJPEG, volontairement contraint et profilé sous ce seuil critique pour éviter 
 toute saturation du canal.

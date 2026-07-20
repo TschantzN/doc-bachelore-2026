@@ -16,7 +16,7 @@ sous-modules a été requise (git submodules).
 L'environnement de développement choisi est \textbf{STM32CubeIDE}\index{STM32CubeIDE}. Le SDK ne 
 respectant pas la structure standard de cet IDE, le projet a été importé en tant que "Makefile 
 Project with Existing Code", en ciblant spécifiquement le répertoire de la carte d'évaluation de 
-l'émetteur (\texttt{mm-mm6108-ekh05} avant sa mise à jour, \texttt{mm-mm8108-ekh05} après).
+l'émetteur (\texttt{mm-mm8108-ekh05}).
 
 \subsection{Adaptation de la chaîne de cross compilation}
 Sous Windows, les outils de compilation en ligne de commande tels que \texttt{make} ne sont pas natifs. 
@@ -50,7 +50,7 @@ EKH05, communiquant via le protocole SWD (\textit{Serial Wire Debug}).
 % PLACEHOLDER POUR LE SCHEMA OU CAPTURE D'ECRAN
 \begin{figure}[htbp]
     \centering
-    % \includegraphics[width=0.8\textwidth]{imgs/debug_config_cubeide.png}
+    \includegraphics[width=0.8\textwidth]{imgs/debug_config_cubeide.png}
     \caption{Configuration du serveur GDB ST-LINK dans STM32CubeIDE}
     \label{fig:debug_config}
 \end{figure}
@@ -64,28 +64,44 @@ Une étape indispensable, distincte de la compilation du code C, est le \textbf{
 Wi-Fi. La puce Morse Micro ne possède pas de mémoire non volatile interne pour ses paramètres vitaux ; 
 elle ne peut pas démarrer sans son micro-code (BCF) et ses paramètres régionaux (\textit{Country Code}), 
 stockés dans une zone mémoire spécifique du STM32 appelée le \textit{Config Store}.
-
+\newpage
 \subsubsection{Architecture de flashage}
 Le processus de flashage repose sur une architecture client-serveur :
 \begin{enumerate}
     \item \textbf{Le Serveur (OpenOCD\index{OpenOCD}) :} Il établit la connexion matérielle entre le 
     port USB et le processeur ARM via la sonde ST-LINK.
+\begin{lstlisting}[language=bash]
+# Terminal 1 : Lancement du serveur OpenOCD pour la cible EKH05
+openocd -f src/platforms/mm-mm8108-ekh05/openocd.cfg
+\end{lstlisting}
+
     \item \textbf{Le Client (Script Python) :} Il lit le fichier de configuration utilisateur 
     (\texttt{config.hjson}), génère le binaire correspondant, et commande au serveur de l'écrire dans 
     la mémoire Flash du STM32 (à l'adresse \texttt{0x08004000}).
+\begin{lstlisting}[language=bash]
+# Terminal 2 : Injection de la configuration dans le Config Store
+python ./tools/platform/program-configstore.py -H localhost write-json ..\examples\spi_interface\config.hjson
+\end{lstlisting}
 \end{enumerate}
 
-\subsubsection{Résolution du conflit de signature et de version matérielle}
-Lors des premiers déploiements, une erreur bloquait la communication SPI entre le MCU et la 
-puce Wi-Fi (\texttt{Transport init failed - Chip ID 0x0000}). Le code embarqué plantait dès 
-l'initialisation du HAL (Hardware Abstraction Layer).
+\subsubsection{Résolution du conflit de version matérielle et calibration radio}
+Lors des premiers déploiements, une erreur bloquait l'initialisation de la communication entre le microcontrôleur 
+et la puce Wi-Fi (\texttt{Transport init failed - Chip ID 0x0000}), provoquant un plantage dès la phase d'initialisation 
+de la couche d'abstraction matérielle (HAL).
 
-L'analyse de ce blocage a révélé un désaccord matériel : le code C et le fichier de 
-configuration cachaient une dépendance stricte à l'ancienne plateforme (MM6108). Notre matériel étant la 
-version MM8108, le binaire de calibration injecté était incorrect. Par une coïncidence extrêmement heureuse, 
-Morse Micro a mis à jour son SDK public la semaine suivante, ajoutant officiellement 
-le support de la cible \texttt{mm-mm8108-ekh05}. \newline
+L'analyse de ce blocage a révélé un désaccord dans le ciblage de la carte d'évaluation. La prise en charge officielle de 
+notre cible matérielle (\texttt{mm-mm8108-ekh05}) a été finalisée lors d'une mise à jour du SDK Morse Micro. 
 
-Cette mise à jour a permis de rediriger le script vers le fichier de calibration 
-exact de la puce (\texttt{bcf\_mf08651\_us.mbin}). Combiné à l'ajustement du fichier \texttt{config.hjson} 
-pour cibler la région "US", la puce radio a pu démarrer avec succès.\newline
+Cette mise à jour a permis d'associer le binaire de calibration radio (BCF) adapté à la puce MM8108. Ce fichier 
+binaire est directement référencé dans la section \texttt{"files"} du fichier de configuration utilisateur 
+(\texttt{config.hjson}) :
+
+\begin{lstlisting}[language=json]
+"files" : {
+    "bcf_file": "$MMIOT_ROOT/morsefirmware/mm8108/bcfs/bcf_mf15457.mbin"
+}
+\end{lstlisting}
+
+Lors de l'exécution du script de provisionnement Python, ce binaire de calibration est lu et injecté en mémoire 
+Flash aux côtés des paramètres réseau et du domaine réglementaire (\texttt{"wlan.country\_code": "US"}), permettant à
+la puce radio de démarrer et de s'initialiser avec succès.

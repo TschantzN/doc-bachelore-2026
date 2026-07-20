@@ -17,14 +17,14 @@ dwt_end = DWT->CYCCNT;
 uint32_t time_us = (dwt_end - dwt_start) / (SystemCoreClock / 1000000);
 \end{lstlisting}
 
-L'extraction de cette métrique a révélé qu'avec l'optimisation agressive des files d'attente QoS et la priorité matérielle 
+L'extraction de cette métrique a révélé qu'avec l'optimisation des files d'attente QoS et la priorité matérielle 
 accordée aux paquets vidéo, le temps de traitement MCU est tombé à environ \textbf{0.3 ms par paquet} (contre 0.8 ms initialement), 
 minimisant le temps de transit interne du microcontrôleur.
 
 \subsubsection{Bilan de la latence de transport radio pur}
 Pour isoler la latence de transmission pure, une architecture à "déclencheur commun" a été mise en place 
 (voir Figure \ref{fig:button_latency_test_schematic}). Deux Raspberry Pi 4B (TX et RX) ont été reliées par un bouton poussoir commun. 
-Le TX injecte un paquet test via SPI lors de l'appui, et le RX fige son chronomètre haute résolution à la réception.
+Le TX injecte un paquet test via SPI lors de l'appui, et le RX fige son chronomètre à la réception.
 
 Les résultats d'un test en rafale (\textit{Burst}) ont donné une moyenne stable de \textbf{10 à 15 ms} par paquet. Ce résultat empirique 
 prouve que le transport radio Sub-1 GHz est extrêmement rapide et n'est pas le responsable des lourdes latences observées sur les transmissions 
@@ -59,8 +59,8 @@ flux MPEG-TS.
 
 Bien que très robuste en termes de portée, cette approche s'est révélée inexploitable pour le pilotage en temps réel. Les contraintes de multiplexage 
 et les importants tampons mémoires des récepteurs standards induisaient une latence "Glass-to-Glass" mesurée entre \textbf{2 et 7 secondes}. Les 
-scripts de configuration et les commandes de ce système de référence sont documentés en \textbf{Annexe C}. Ce constat met en lumière la 
-pertinence de l'implémentation directe d'un pont SPI-HaLow dédié pour contourner ces goulots d'étranglement industriels.
+scripts de configuration et les commandes de ce système de référence sont documentés en . Ce constat met en lumière la 
+pertinence de l'implémentation d'une architecture dédié comme celle présenté dans ce rapport pour contourner ces goulots d'étranglement industriels.
 
 \subsubsection{Validation matérielle RF et limitations de puissance}
 Pour s'assurer que le lien radio exploitait au mieux ses capacités, des tests de puissance d'émission ont été menés à l'aide d'un analyseur de 
@@ -73,7 +73,9 @@ constructeur Morse Micro pour comprendre l'origine de cette limitation logiciell
 n'impacte pas la latence à courte portée, elle représente une limite critique pour la portée maximale.
 
 \subsubsection{Évaluation empirique de la portée et de la pénétration (NLOS)}
-Afin d'évaluer la robustesse physique de la liaison radio HaLow Sub-1 GHz, des tests de transmission ont été réalisés en conditions réelles dans différents environnements d'obstacles, en gardant à l'esprit la limitation physique transitoire à \textbf{14 dBm} de notre module d'émission (TX) :
+Afin d'évaluer la robustesse physique de la liaison radio HaLow Sub-1 GHz, des tests de transmission ont été 
+réalisés en conditions réelles dans différents environnements d'obstacles, en gardant à l'esprit la limitation physique 
+à \textbf{14 dBm} de notre module d'émission (TX) :
 
 \begin{table}[htbp]
     \centering
@@ -91,12 +93,18 @@ Afin d'évaluer la robustesse physique de la liaison radio HaLow Sub-1 GHz, des 
     \label{tab:nlos_range_test}
 \end{table}
 
-Ces essais démontrent de manière éclatante la viabilité de la liaison Sub-1 GHz. Traverser deux dalles complètes en béton au sein des locaux de l'IICT tout en maintenant un débit de 1.53 Mbps est une performance hors de portée pour les systèmes standards 5.8 GHz à puissance égale. L'obtention d'un firmware d'émetteur corrigé permettant d'atteindre les 26 dBm nominaux débloquera des performances de portée NLOS encore supérieures.
+Ces essais démontrent la viabilité de la liaison Sub-1 GHz. Traverser deux dalles complètes en béton au sein des locaux 
+de l'IICT tout en maintenant le lien vidéo est une performance hors de portée pour les systèmes standards 5.8 GHz à 
+puissance égale. L'obtention d'un firmware d'émetteur corrigé permettant d'atteindre les 26 dBm nominaux débloquera 
+des performances de portée NLOS encore supérieures.
 
 \subsubsection{Qualité visuelle en conditions réelles}
-La forte compression appliquée (Qualité JPEG fixée au niveau 8) et la résolution de 320x240 pixels représentent le « sweetspot » trouvé empiriquement pour maintenir un débit de 1.53 Mbps sans perte de trames. En extérieur, le traitement d'image de l'ISP (lissage automatique du bruit numérique) compense la réduction de résolution spatiale. L'image résultante conserve une netteté suffisante pour distinguer précisément les obstacles en vol.
+La forte compression appliquée (Qualité JPEG fixée au niveau 8) et la résolution de 320x240 pixels représentent le 
+« sweetspot » trouvé empiriquement pour maintenir un débit de 1.53 Mbps sans perte de trames. En extérieur, l'image résultante 
+conserve une netteté suffisante pour distinguer les obstacles en vol de manière raisonable.
 
-Afin d'illustrer les performances visuelles du système face à la réalité du terrain, un comparatif direct a été mené entre les captures d'écran du flux vidéo compressé reçu et des clichés de référence pris simultanément avec un smartphone :
+Afin d'illustrer les performances visuelles du système, un comparatif direct a été mené entre les captures d'écran du 
+flux vidéo compressé reçu et des photos de référence prises avec un smartphone :
 
 \begin{figure}[!htp]
     \centering
@@ -122,7 +130,7 @@ Afin d'illustrer les performances visuelles du système face à la réalité du 
     \begin{minipage}{0.48\textwidth}
         \centering
         \includegraphics[width=\textwidth]{imgs/img_plate_bande1.png}
-        \caption{Flux FPV : Détail d'une plate-bande}
+        \caption{Flux FPV : Détail d'une plate-bande 1}
         \label{fig:mjpeg_plate_bande1}
     \end{minipage}
     \hfill
@@ -140,7 +148,7 @@ Afin d'illustrer les performances visuelles du système face à la réalité du 
     \begin{minipage}{0.48\textwidth}
         \centering
         \includegraphics[width=\textwidth]{imgs/img_plate_bande2.png}
-        \caption{Flux FPV : Obstacles au sol}
+        \caption{Flux FPV : Détail d'une plate-bande 2}
         \label{fig:mjpeg_plate_bande2}
     \end{minipage}
     \hfill
@@ -177,9 +185,9 @@ La procédure de test sur le terrain s'articule ainsi :
     $$8 \times 5 \text{ ms} = 40 \text{ ms}$$
 \end{enumerate}
 
-Cette approche par comptage de motifs différentiels élimine tout biais lié au rafraîchissement des dalles 
+Cette approche par comptage de motifs minimise le biais lié au rafraîchissement des dalles 
 et offre une précision de lecture nettement supérieure à celle d'un chronomètre numérique classique, dont les 
-chiffres flous induits par la rémanence empêchent une quantification fiable. Pour obtenir un profil statistique 
+chiffres flous induits par la rémanence empêchent une lecture fiable. Pour obtenir un profil statistique 
 complet, 79 échantillons ont été prélevés à des instants distincts au cours de plusieurs transmissions indépendantes.
 
 %\begin{figure}[!htp]
@@ -216,7 +224,8 @@ complet, 79 échantillons ont été prélevés à des instants distincts au cour
 
 \clearpage
 
-L'analyse statistique de ces 79 mesures de terrain (voir Figure \ref{fig:latency_plot}) révèle des performances remarquables, parfaitement stables à travers plusieurs captures successives :
+L'analyse statistique de ces 79 mesures de terrain (voir Figure \ref{fig:latency_plot}) révèle des performances 
+remarquables, extrêmement régulière à travers plusieurs captures successives :
 \begin{itemize}
     \item \textbf{Latence moyenne :} \textbf{40.1 ms}.
     \item \textbf{Latence médiane :} \textbf{40.0 ms}.
@@ -225,7 +234,10 @@ L'analyse statistique de ces 79 mesures de terrain (voir Figure \ref{fig:latency
     \item \textbf{Écart-type (Gigue) :} \textbf{6.4 ms}.
 \end{itemize}
 
-Ces résultats démontrent l'absence de dérive temporelle au cours du temps. Le flux vidéo se maintient continuellement en dessous du seuil de viabilité fixé par le cahier des charges (80 ms), validant ainsi définitivement la faisabilité de l'utilisation du Wi-Fi HaLow pour la transmission vidéo ultra-basse latence en temps réel.
+Ces résultats démontrent l'absence de dérive temporelle au cours du temps. Le flux vidéo se 
+maintient continuellement en dessous du seuil de viabilité fixé par le cahier des charges 
+(80 ms), validant ainsi définitivement la faisabilité de l'utilisation du Wi-Fi HaLow pour la 
+transmission vidéo en temps réel.
 
 \begin{figure}[!htp]
     \centering

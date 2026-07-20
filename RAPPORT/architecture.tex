@@ -42,7 +42,7 @@ vidéo et d'encodage a fait l'objet d'une sélection itérative parmi plusieurs 
     s'est révélé nettement plus efficace en termes de latence brute que toutes les autres solutions testées.
     \item Une \textbf{Debix Model A}\index{Debix} : Évaluée brièvement pour ses capacités théoriques. Elle a rapidement 
     été écartée car l'exploitation de son accélération matérielle nécessitait l'utilisation de longs pipelines GStreamer 
-    qui introduisaient plus de latence logicielle que l'implémentation directe et rationalisée de \texttt{rpicam-vid} 
+    qui introduisaient plus de latence logicielle que l'implémentation directe de \texttt{rpicam-vid} 
     sur la Raspberry Pi.
 \end{itemize}
 
@@ -65,7 +65,7 @@ environnements ont été employés pour observer l'impact des couches d'abstract
 \begin{itemize}
     \item \textbf{La station cible (Raspberry Pi 4 / CM4) :} Utilisée lors du prototypage pour évaluer 
     des pipelines d'affichage KMS (\textit{Kernel Mode Setting}) afin de s'affranchir de l'overhead de l'OS. 
-    \item \textbf{La station de décodage haute performance (PC fixe, GPU NVIDIA RTX 4070 Ti) :} Bien que l'architecture 
+    \item \textbf{La station de décodage haute performance (PC fixe, GPU NVIDIA RTX 4070 Tis) :} Bien que l'architecture 
     cible finale d'un tel système soit embarquée, cette plateforme de diagnostic a été retenue pour l'établissement 
     de nos mesures de performance finales. Ce choix est principalement dicté par la nécessité d'utiliser un écran 
     haute fréquence, en l'occurrence \textbf{165 Hz}. Cette caractéristique est indispensable pour éliminer le goulot d'étranglement 
@@ -78,7 +78,7 @@ Suite aux phases d'évaluations itératives, l'architecture optimale et stabilis
 \begin{itemize}
     \item \textbf{Côté Émetteur (TX) :} Une caméra Raspberry Pi V2 reliée à une Raspberry Pi 4B (CPU isolé sur le cœur 3, overclocké à 2.0 GHz). Le flux vidéo est capturé et compressé à la volée au format MJPEG à l'aide de l'outil \texttt{rpicam-vid} (320x240, 60 FPS, Qualité 8). Les trames sont découpées et poussées sur le bus SPI cadencé à 8 MHz par notre passerelle en C (\texttt{gateway\_spi.c}) vers la carte de transmission STM32U5/MM8108 (EKH05).
     \item \textbf{Liaison Radio :} Modulation fixe forcée en MCS 1 (8 MHz de largeur de bande) utilisant le protocole UDP Unicast avec un marquage agressif de la Qualité de Service MAC (WMM/EDCA file "Voice") et la désactivation totale du mode d'économie d'énergie (PSM).
-    \item \textbf{Côté Récepteur (RX) :} La carte de réception EKH19 reliée en bus interne au routeur OpenWrt GL.iNet MT3000, configurée en simple pont Ethernet transparent vers notre PC fixe de diagnostic (décodage GStreamer logiciel sans synchronisation et affichage direct sur l'écran haute vitesse 165 Hz).
+    \item \textbf{Côté Récepteur (RX) :} La carte de réception EKH19 reliée au routeur OpenWrt GL.iNet MT3000, configurée en simple pont Ethernet transparent vers notre PC fixe de diagnostic (décodage GStreamer logiciel sans synchronisation et affichage direct sur l'écran haute vitesse 165 Hz).
 \end{itemize}
 \begin{figure}[htbp]
     \centering
