@@ -91,9 +91,8 @@ L'explication physique de ce forçage est la suivante :
     \item \textbf{\texttt{cw\_min = 1} et \texttt{cw\_max = 1} :} En Wi-Fi standard, si le canal est occupé ou qu'une collision survient, l'émetteur applique un recul aléatoire exponentiel pour retenter sa chance plus tard. En forçant ces fenêtres à leur valeur minimale (\texttt{1}), le STM32 retente l'émission immédiatement sans délai d'attente, écrasant virtuellement les autres trafics environnants pour imposer l'envoi de la vidéo.
 \end{itemize}
 
-L'application de ce "hack" de QoS a permis de digérer l'overhead des acquittements MAC Unicast tout en 
+L'application de ce "hack" de QoS a permis de réduire l'overhead des acquittements MAC Unicast tout en 
 récupérant les \textbf{40 ms} perdues dans les buffers DTIM du routeur, stabilisant ainsi la liaison radio.
-Cela a également eu pour effet 
 
 \subsection{Optimisation de la réactivité radio : Désactivation du PSM}
 Par défaut, le SDK Morse Micro active les profils d'économie d'énergie (\textit{Power Saving Mode} - PSM) 

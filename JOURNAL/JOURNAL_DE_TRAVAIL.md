@@ -610,6 +610,7 @@ gantt
     section Documentation
     Rédaction du CDC :done, doc1, 2026-02-16, 2026-03-09
     CDC validé :done, milestone ,2026-03-09, 0d
+    Journal de travail       :done, doc3, 2026-02-16, 2026-07-23
     correction détail CDC :done, doc2, 2026-03-24, 1d
     Rapport - Intro & Faisabilité :done, doc3, 2026-02-27, 2026-03-21
     Rapport - Architecture Système :done, doc4, 2026-03-29, 2026-05-10

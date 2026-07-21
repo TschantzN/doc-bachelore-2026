@@ -101,11 +101,11 @@ rpicam-vid -t 0 -n -o - --width 320 --height 240 --framerate 60 --codec mjpeg \
 \subsubsection{Précisions sur les paramètres d'envoi}
 Les arguments passés à la ligne de commande visent à supprimer tout traitement d'image adaptatif :
 \begin{itemize}
-    \item \textbf{\texttt{--flush} :} Force l'expulsion immédiate des données JPEG compressées de l'espace noyau vers la sortie standard (\textit{stdout}), court-circuitant les tampons de cache en écriture du système d'exploitation de la Raspberry Pi.
     \item \textbf{\texttt{--width 320 --height 240} (Downscaling matériel) :} L'ISP du capteur IMX219 effectue un sous-échantillonnage matériel direct. Cela réduit drastiquement le poids des données à traiter sans solliciter le processeur principal de la carte.
     \item \textbf{\texttt{--denoise off} :} Désactive l'algorithme de réduction du bruit numérique, éliminant ainsi une étape de calcul sur l'ISP.
     \item \textbf{\texttt{--exposure sport} et \texttt{--awb daylight} :} Gèle l'exposition automatique sur des temps d'obturation très courts (sport) et fixe la balance des blancs. Cela évite les variations du temps de calcul de l'ISP lors des changements brusques de luminosité.
     \item \textbf{\texttt{--quality 8} :} Règle la table de quantification JPEG sur une compression forte (100\% étant la qualité max, ici nous avons donc une qualité de 8\%). Ce paramètre clé maintient le flux utile moyen autour de 1.5 Mbps, lui permettant de traverser le canal radio de 8 MHz sans saturation.
+    \item \textbf{\texttt{--flush} :} Force l'expulsion immédiate des données JPEG compressées de l'espace noyau vers la sortie standard (\textit{stdout}), court-circuitant les tampons de cache en écriture du système d'exploitation de la Raspberry Pi.
 \end{itemize}
 
 \newpage
