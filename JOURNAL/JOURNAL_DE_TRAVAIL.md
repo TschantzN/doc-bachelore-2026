@@ -550,12 +550,15 @@ gantt
 - Calcul rigoureux de l'écart-type : validation d'une gigue $\sigma$ stable de 6.4 ms pour une latence moyenne absolue de 40.1 ms.
 - Relecture globale, corrections typographiques, génération des tables des matières, compilation des index et finalisation de la mise en page LaTeX du rapport et des annexes séparées.
 
+### Mardi 21.07
+- Rendu
+
 ### Jeudi 23.07 avant 11h00
 - **Rendu final du rapport de Bachelor et de ses annexes matérielles.**
 
 ---
 
-## Version finale du diagramme de Gantt (23.07)
+## Version finale du diagramme de Gantt (21.07)
 
 ```mermaid
 gantt

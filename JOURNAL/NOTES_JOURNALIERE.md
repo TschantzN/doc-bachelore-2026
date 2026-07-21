@@ -4931,14 +4931,13 @@ combiner glossaire et terminologie et concept de base...
 
 [x] Abstract
 
-[ ] Terminologie et concept de base
+[x] Terminologie et concept de base
 
 [x] Introduction
 
-[ ] étude de faisabilité - Idem rendu intermédiaire
+[x] étude de faisabilité - Idem rendu intermédiaire
 
-[ ] Architecture globale du système
-- enlever le gpu utiliser ?
+[x] Architecture globale du système
 
 [x] configuration de l'environnement de développement embarqué - Idem rendu intermédiaire
 
@@ -4953,14 +4952,9 @@ combiner glossaire et terminologie et concept de base...
 [x] Conclusion
 
 [x] Note sur l'utilisation de l'intelligence artificielle
-- relire a la fin
 
-[ ] Bbiliographie
-- trouver d'autre source ?
+[x] Bbiliographie
 
-[ ] Annexes
-- relire dvbt2.
-- mettre a jours les indexes.
-- update les IP, meme si en vrai s'est égale.
+[x] Annexes
 
 
